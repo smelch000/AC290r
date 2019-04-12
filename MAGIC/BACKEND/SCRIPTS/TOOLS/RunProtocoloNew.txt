@@ -1,0 +1,142 @@
+---------- LOCAL STL PROCESSING
+
+For any patient annotate values on the Eexcle file on Dropbox
+Segment via HemoGui / PowerDeltaA produce the STL file.
+
+Change directory in the local working folder and be sure there is no file in the folder 
+except for the STL (ascii version only - in case paraview does binary to ascii conversion)
+
+gmuphy.py
+    panel2: load STL
+    panel3: 
+        use P-key to select inlet/outlet, not too close to extremity
+        add i/o w name and default BC (inlet:pressure, outlet:flow)
+        Panel -> Save Panel Data (in current folder)
+        generate mesh with scale 10 : result in mesh_0
+        generate mesh with scale 20 : result in mesh_1
+        generate mesh with scale 30 : result in mesh_2
+    quit gmuphy
+
+In case of restarting gmuphy.py, to load the current set of inlet/outlets:
+    panel3:
+        Panel -> Load Panel Data (from current folder)
+        generate_mesh
+        etc.
+
+Look at sections.dat and use paraview to assess the inlet and outlet areas (in mm2) 
+and store data in the text file README.txt
+
+# create centerlines:
+chmod +x ./clines.sh
+./clines.sh
+
+# rename dirs
+mv mesh_0 mesh_100voxcm
+mv mesh_1 mesh_200voxcm
+mv mesh_2 mesh_300voxcm
+
+# compress files for fast transfer
+bzip2 mesh_100voxcm/*
+bzip2 mesh_200voxcm/*
+bzip2 mesh_300voxcm/*
+
+
+--------- PARALLEL PRE-PROCESSING @ Exa
+
+# log to robohemo @ exa:
+ssh robohemo@149.65.128.202
+
+# parallel preprocessing for 200voxcm and 300voxcm cases (100voxcm runs serially):
+cd ...working_dir_with_200voxcm...
+bunzip2 *.bz2       # uncompress all files
+cp ~/SWIZ/prepare.py.template ./prepare.py # copy template
+cp ~/SWIZ/run2.py.template ./run2.py # copy template
+# edit the prepare.py and modify the variables:
+#   VOXCM : reflecting the mesh resolution
+#   all names and areas (in mm2) in the addInlet and addOutlet 
+#
+#   you can optionally modify in case the run did not succeed (see later):
+#       VIN (if hyperemia requires it, eg for anomalous vessel area/myocardial mass)
+#       NSTEP (make it larger if stabilization vs time is too slow)
+#       MACH (make it larger if simulation is unstable)
+#       VCH (make it smaller if simulation is unstable)
+
+rm bgkflag_*.dat bgkflag_*.hdr
+./run2.py -p 4
+bzip2 *
+# ...repeat the procedure for working_dir_with_300voxcm...
+
+# copy folder to lugano
+scp -r mesh_100voxcm smelchio@ela.cscs.ch:...destination_dir...
+scp -r mesh_200voxcm smelchio@ela.cscs.ch:...destination_dir...
+scp -r mesh_300voxcm smelchio@ela.cscs.ch:...destination_dir...
+
+---------- RUN IN LUGANO
+
+### BEWARE: on daint the data used for running the jobs are stored on the SCRATCH folder. 
+### Therefore moving data robohemo <-> ela <-> daint requires:
+###    scp directories from robohemo to the home dir on ela.cscs.ch 
+###    log on ela.cscs.ch and then on daint.cscs.ch
+###    mv directories from the home dir to the SCRATCH area
+###    run the job
+###    mv back directory from the SCRATCH to home dir
+###    rsync from robohemo to send back stuff
+
+# The full protocol in lugano is the following:
+
+# copy folders to lugano
+scp -r mesh_100voxcm smelchio@ela.cscs.ch:...local_folder...
+scp -r mesh_200voxcm smelchio@ela.cscs.ch:...local_folder...
+scp -r mesh_300voxcm smelchio@ela.cscs.ch:...local_folder...
+
+# log on the lugano machine
+ssh -X smelchio@ela.cscs.ch
+
+# log on the lugano backend machine
+ssh daint.cscs.ch
+
+# request for resources via the interactive queue
+# (further instructions on pizdaint and the "slurm" queuing system on the cscs.ch website)
+
+# serial run (mesh_100voxcm)
+salloc -N 1 -n 1 --gres=gpu:1 --time=04:00:00
+cd ...working_directory...
+prepare
+aprun ./run2.py -x gpu | tee out
+
+# parallel run (mesh_200 and mesh_300voxcm)
+salloc -N 4 -n 4 -d 8 --gres=gpu:1 --time=04:00:00
+cd ...working_directory...
+prepare
+aprun -B ./run2.py -x gpu | tee out
+
+# the runs will write some infos on the "out" file. Check that the current run completed 
+# correctly by inspecting the end of the file "out"
+
+# if the 300voxcm run did not complete correctly, try to raise MACH or VCH in prepare.py and rerun
+# if the 100voxcm or 200voxcm did not complete correctly, do not try to re-run
+
+# if the run completed ok, compress all files in working dir to facilitate transfers
+
+find . -exec bzip2 {} \;    # ...wait until completed
+
+----------- POST-PROCESSING @ Exa
+
+# syncronize all files by mirroring all data in specified dir from lugano -> robohemo
+
+# log as robohemo @ exa, then:
+cd SWIZ
+./rsync_swiz2exa.sh
+
+# now all swiss files are in the local directories
+# cd in local working folder and decompress:
+find . -exec bunzip2 {} \;
+
+# post-process data to sample values on clines (for LAD,LCX and RCA vessels only)
+# and create a surface model painted with values
+# See the following example. Beware to have no white spaces between commas.
+ugrid_lu2mks.py -i DIRDATA_BGK/VTK/T0000001000.pvtu -m mesh_transform.inp -c DIR_cline.outlet_0_LAD/cline.outlet_0_LAD.vtk,DIR_cline.outlet_1_LCX/cline.outlet_1_LCX.vtk -o MUP.vtk
+
+# The final file MUP.vtk and clines*dat should be uploaded on the web (ask LJ for the script!)
+
+----------- VISUALIZE FROM HOME

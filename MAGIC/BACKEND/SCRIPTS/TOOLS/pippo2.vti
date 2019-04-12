@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<VTKFile type="ImageData" version="0.1" byte_order="LittleEndian" header_type="UInt32" compressor="vtkZLibDataCompressor">
+  <ImageData WholeExtent="0 -2 0 -2 0 -2" Origin="2 2 2" Spacing="2 2 2">
+    <Piece Extent="0 -2 0 -2 0 -2"                                                    >
+      <PointData Scalars="ImageScalars">
+        <DataArray type="Int8" Name="vtkValidPointMask" format="appended" RangeMin=""                     RangeMax=""                     offset="0"                   />
+        <DataArray type="UInt16" Name="ImageScalars" NumberOfComponents="2" format="appended" RangeMin=""                     RangeMax=""                     offset=""                    />
+      </PointData>
+      <CellData>
+      </CellData>
+    </Piece>
+  </ImageData>
+  <AppendedData encoding="base64">
+   _

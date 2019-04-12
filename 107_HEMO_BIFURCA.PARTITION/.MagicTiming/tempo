@@ -1,0 +1,19 @@
+ # Number of MPI Processes:           1
+
+********** GLOBAL TIMINGS (full simulation) **********
+
+   ( 64.2%)                    LB                         write_field_vtk        0.669E-03       20002   0.669E-03   0.669E-03
+   ( 29.6%)                    LB                  collinoisemove_new_gpu        0.616E-03       10001   0.616E-03   0.616E-03
+   (  6.2%)               TRACKER                           tracker_fluid        0.127E-01         101   0.127E-01   0.127E-01
+   (  0.0%)                    LB                          fluid_dump_out        0.456E-06       10001   0.456E-06   0.456E-06
+   (  0.0%)                    LB                               hvarFluid        0.450E-02           1   0.450E-02   0.450E-02
+   (  0.0%)                    LB                         bc_inlet_outlet        0.586E-03           1   0.586E-03   0.586E-03
+   (  0.0%)               TRACKER                  tracker_register_fluid        0.284E-05           1   0.284E-05   0.284E-05
+   (  0.0%)                    LB                               bariFluid        0.101E-05           1   0.101E-05   0.101E-05
+
+(  0.0%) LB    0.00     sec/call, 0 calls,   0.00     calls/step
+
+(  0.0%) TRACKER    0.00     sec/call, 0 calls,   0.00     calls/step
+
+Sum of section timings:       0.000
+

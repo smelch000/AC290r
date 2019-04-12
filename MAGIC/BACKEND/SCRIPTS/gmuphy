@@ -1,0 +1,102 @@
+#!/usr/bin/env python2.7
+##!/usr/bin/env /usr/local/bin/python2
+
+# HomeBrew : Qt5 : OK
+# Conda : Qt4 : Fails
+
+###!/usr/bin/env pythonw
+###!/usr/bin/env python
+
+import myqt
+import sys,os
+
+#sys.path.append(os.environ["MUPHY_ROOT"]+"/GMUPHY")
+#sys.path.append(os.environ["MUPHY_ROOT"]+"/GMUPHY/tools")
+#sys.path.append(os.environ["MUPHY_ROOT"]+"/ECOMUPHY")
+#sys.path.append(os.environ["MUPHY_ROOT"]+"/ECOMUPHY/ICONS")
+
+import argparse
+import inspect
+
+import ECOSYS.GMAP.gmap as GMAP
+import GMAP.map as MAP
+import GCURVE.gcurve as GCURVE
+
+from myvtk import *
+try:
+    v = vtk.VTK_MAJOR_VERSION
+    import gconvert as GCONVERT
+    import GSURFACE.viewsurface as GSURFACE
+    import GPLANES.viewplanes as GPLANES
+    import GMESH.viewmesh as GMESH
+    vtk_ok = True
+except:
+    vtk_ok = False
+
+parser = argparse.ArgumentParser(description='gmuphy and tools (SM)')
+
+subparsers = parser.add_subparsers(help='sub-command help', dest='subparser_name')
+
+SegmentParser = subparsers.add_parser('segment', help = "segmentation tool (gmuphy.py)")
+
+GmapParser = subparsers.add_parser('gmap', help = "map file analyzer (gmap.py)")
+MAP.iniparser(GmapParser)
+
+GcurveParser = subparsers.add_parser('gcurve', help = "curve file analyzer (gcurve.py)")
+GCURVE.iniparser(GcurveParser)
+
+if vtk_ok:
+
+    GsurfaceParser = subparsers.add_parser('gsurface', help = "surface analyzer (viewsurface.py)")
+    GSURFACE.iniparser(GsurfaceParser)
+
+    GplanesParser = subparsers.add_parser('gplanes', help = "radio image/planes analyzer (viewplanes.py)")
+    GPLANES.iniparser(GplanesParser)
+
+    GmeshParser = subparsers.add_parser('gmesh', help = "radio image/mesh analyzer (viewmesh.py)")
+    GMESH.iniparser(GmeshParser)
+
+    CParser = subparsers.add_parser('convert', help = "convert between formats")
+    GCONVERT.iniparser(CParser)
+
+if __name__ == "__main__":
+
+    args = parser.parse_args()
+
+    if args.subparser_name == 'segment':
+
+        import gmuphy as GMUPHY
+        # print inspect.getmoduleinfo('gmuphy.py')
+        run = GMUPHY.main()
+
+    elif args.subparser_name == 'gmap':
+
+        # run = gmapmain(args)
+        run = GMAP.main(args)
+
+    elif args.subparser_name == 'gcurve':
+
+        run = GCURVE.main(args)
+
+    elif args.subparser_name == 'gsurface':
+
+        run = GSURFACE.main(args)
+
+    elif args.subparser_name == 'gplanes':
+
+        run = GPLANES.main(args)
+
+    elif args.subparser_name == 'gmesh':
+
+        run = GMESH.main(args)
+
+    elif args.subparser_name == 'convert':
+
+        run = GCONVERT.main(args)
+
+    else:
+
+        print ('wrong command....',args.subparser_name)
+
+
+

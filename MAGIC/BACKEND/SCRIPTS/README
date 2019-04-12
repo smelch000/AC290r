@@ -1,0 +1,6 @@
+See
+https://docs.google.com/document/d/1onBliKct63JTOMSw2gyeo3gc_-7ECS1cMNJVFgYqM-k/edit?usp=sharing
+for documentation on various scripts in this folder.
+
+The modeller python library is needed for protein loops reconstruction.
+It my be installed with install-package (using anaconda).

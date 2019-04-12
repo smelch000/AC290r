@@ -1,14 +1,8 @@
 #!/usr/bin/env python
 
-try:
-    from MagicUniverse import *
-except:
-    from muphy2wrapper import *
+from MagicUniverse import *
 
-try:
-    MagicBegins()
-except:
-    muphy2parser()
+MagicBegins()
 
 # define universe
 u = Universe()
@@ -22,7 +16,7 @@ u.addItems([s,m,f,t])
 u.setTitle('106_SSUNG_WK')
 u.setNumberOfSteps(5000)
 u.setStateRestart(False)
-u.setStateDumpFrequency(10000)
+u.setStateDumpFrequency(-1)
 
 u.create()
 
@@ -31,17 +25,15 @@ s.set(name='MonoScale', mesh=m,  actors=[f,t])
 
 m.setRegularMesh(False)
 m.setPeriodicity('000')
-# m.setSystemExchange('inlet/outlet')
 m.setDomainDecomposition(8)
 
 t.setDiagnosticFrequency(100)
 # t.setDataShow(velocity=True)
 # t.setMapDirections('zx')
 
-t.setVtkDump(True, meshtype='unstructured', frequency=100)
+t.setVtkDump(True, meshtype='unstructured', frequency=500)
 
-f.setName('BGK')
-f.setCollisionType('BGK')
+f.setName('BloodFlow')
 
 f.setDensityUniform(1.0)
 f.setViscosity(0.16667)
@@ -53,13 +45,8 @@ f.setStabilizeLB(True)
 
 u.decorate()
 
-# prepare.check(f)
-
 for itime in u.cycle():
 
     u.animate()
 
-try:
-    MagicEnds()
-except:
-    muphy2wrapper_finish()
+MagicEnds()

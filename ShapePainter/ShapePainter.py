@@ -169,5 +169,5 @@ if __name__ == '__main__' :
         INBC = 'flow', OUTBC = 'pressure',
         INVAL = '0.01', OUTVAL = '0.0',
         OUTSTL = 'SP.stl',
-        VISUAL = True)
+        VISUAL = False)
 

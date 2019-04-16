@@ -14,7 +14,7 @@ sys.path.append( os.path.join(os.getenv("MOEBIUS_ROOT"), "BACKEND/SCRIPTS") )
 
 TOLERANCE=0.
 
-from myvtk import *
+from vtk import *
 import argparse
 import numpy as np
 from scipy import ndimage

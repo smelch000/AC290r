@@ -4,7 +4,7 @@ import sys,os
 import csv
 import numpy as np
 import ctypes
-from myvtk import *
+from vtk import *
 from math import *
 from inletoutlet import *
 import inletoutlet as IO

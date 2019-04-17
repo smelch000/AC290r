@@ -1,0 +1,621 @@
+
+     ******************************************************************************************
+     ******************************************************************************************
+     ******************************************************************************************
+
+     +                              MOEBIUS : Multi-Scale Simulator                           +
+     +                                                                                        +
+     +                                     LEXMA TECHNOLOGY                                   +
+     +                                   All Rights Reserved                                  +
+     +                                                                                        +
+     +                               Compiler: Gnu GCC version 7.1.0                          +
+
+     ******************************************************************************************
+     ******************************************************************************************
+     ******************************************************************************************
+
+
+                      Compilation Flags:
+    General Int   Precision (Largemesh):     8
+    General Float Precision       (Prc):     4
+                                    Mpi:    ON
+                      Mesh I/O (Meshio): Fmtio
+                                   Cuda:   Off
+                                 Netcdf:   Off
+                                Graphic:   Off
+                                  Debug:   Off
+                                  Check:    NO
+                 Self-saturation for MG:    ON
+
+     Parallel Run: Number of Processes <<< 4 >>>  
+
+     Date:17/04/2019   Time:13:32
+
+============================================================================================ 
+
+                              CFD Characteristic Quantities
+Characteristic Length                1 [m]    
+('Voxelization Density                 1 [Vox/Lch]',)
+('         1 [Vox/m]  ',)
+      0.01 [Vox/cm] 
+Spatial Resolution (Dx)              1 [m]    
+Physical Density                     1 [Kg/m3]
+Characteristic Velocity              1 [m/s]  
+Physical Viscosity                   1 [m2/s] 
+Simulated Mach                       1        
+
+                                  Derived Quantities
+Timestep                        0.5774 [s]    
+Total Simulation Time             5774 [s]    
+Lattice Viscosity               0.5774 [LU]   
+Lattice Char. Velocity          0.5774 [LU]  
+
+============================================================================================ 
+
+
+                    job title: Pisa/Massa 000_patient_m
+
+        Number of time cycles:       10000
+
+             Heartbeat period:           1
+
+             start STATE from: SCRATCH
+
+        start conf STATE from: SCRATCH
+         STATE dump frequency:      -1
+
+                  Temperature:  0.0000    
+             start STATE from: SCRATCH
+
+         STATE dump frequency:      -1
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Created_Universe     Max. Resident Memory: 0 MB      Shared Memory: 0 MB     Unshared Memory: 0 MB
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+     ****************************** MESHES ******************************
+
+                       mesh # 1
+                        Files: bgkflag.hdr / bgkflag.dat / bgkflag.ios
+      Aperiodic in x direction
+      Aperiodic in y direction
+      Aperiodic in z direction
+                 Partitioning: Unspecified (Automatic Generation)
+            Auto Mesh Filling: Off (nodes fully specified in input files)
+    Mesh nodes  specification: From per-processor mesh file set)
+        Work as pre-processor: Off
+  Read from preprocessed mesh: Off
+ Write connectivity on flagdd: Off
+
+             Synchronous send: Active
+
+       Wall-to-Fluid response: No Slip
+
+             Wall slip factor:   0.0000000    
+
+
+            Processing mesh...
+
+
+ Reading (formatted) grid file - (header part)
+
+ Mflu=       10952 Mwio=        6921
+ First call to readdeco not required with the new format
+ Task Balance: min:            0  nodes
+ Task Balance: max:            0  nodes
+
+ Reading (formatted) grid file - (data part)
+
+Passed test on nodes in bounding box
+
+
+       Box size in x direction   171        periodicity:  F
+       Box size in y direction   145        periodicity:  F
+       Box size in z direction   242        periodicity:  F
+
+                 Mesh spacing: 1  =    1.00000     [MKS]
+
+
+ Reading (formatted) nodeownr.inp - 2nd time
+ Reading nodeownr.inp done
+
+ Mesh allocation size(max):       19437
+ Mesh allocation size(min):       18438
+ Max connectivity index           3
+
+     ****************************** FLUIDS ******************************
+
+
+          ________________________________________
+
+                      Fluid #  1
+
+                         Name: BloodFlow
+                    Viscosity:   0.16666000    
+          Characteristic time:   0.99997997    
+              Elementary mass:    1.0000000    
+                  HS diameter:    0.0000000    
+                 Vlasov delta:    0.0000000    
+                       Charge:    0.0000000    
+               Number Density:   0.22000000    
+                   Body force:    0.0000000       0.0000000       0.0000000    
+               Electric force:    0.0000000       0.0000000       0.0000000    
+                   Force roof:    1000000.0    
+                   Dump input: Binary
+                  Dump output: Binary
+            Fluctuating fluid: Off
+       Fluid acts on particle: Active
+Auxiliary distribution method: Off
+    Hard Spheres decorrelated: Active
+  LDA approx for Hard Spheres: Off
+                LB stabilized: Active    Vmax:    0.900000
+               LB regularized: Off
+                  LB entropic: Off
+             LB double buffer: Active
+Stop CenterOfMass (everyStep): Off
+                  System type: Aperiodic
+
+Inlet/outlet boundary method: Zou-He method
+
+  Phys. kin.viscosity (input):    1.0000000     [m^2/s]
+        Phys. density (input):    1.0000000     [Kg/m^3]
+
+        HS-correlated / orthogonal BGK equilibrium
+ Altering diffusion of species             Off
+     Shan-Chen interaction is:  Off
+
+ Number of putative nearwall nodes:           0
+
+          Wall BC infos file : Absent
+
+ Number of nearwall nodes:           0
+
+  Inlet/Outlet infos on file : bgkflag.ios
+
+ inlet exposed area :   314.000000               1
+ outlet exposed area :   295.000000               2
+ outlet exposed area :   154.000000               3
+
+     ****************************** TRACKERS ******************************
+
+
+                      Track # 1  TRK1
+
+   Output (tracker) frequency:     100
+
+
+         Tracker block timing:     off
+
+     Fluid snapshot frequency:      -1
+Surface stress dump frequency:       0                   start step:       0
+
+Creating data folder: DIRDATA_BloodFlow/
+
+
+ vtk active: action overridden by external/direct command
+
+     ****************************** SCALES ******************************
+
+   ScalePath:
+
+          1  MonoScale
+
+          scale # 1
+
+                          Name:   MonoScale
+                          Mesh:   MESH1
+                     Timechart:   1
+                         Track:   TRK1
+                        Fluids:
+                              1  BloodFlow  (F-id:1)
+
+ Voxels constructed:                  10792
+ Nodes involved in octa-voxels:       13207
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Decorate             Max. Resident Memory: 0 MB      Shared Memory: 0 MB     Unshared Memory: 0 MB
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+____________________________________________________________________________________________________
+                       Mass            Jx            Jy            Jz          Vmax        T-Temp       SimErrs
+____________________________________________________________________________________________________
+
+TIME        1.0 /     10000    0.57735026     [s]
+BloodFlo         0.1055E+05   -0.1929E-05   -0.1286E-05   -0.1983E-02    0.5769E+00    0.0000E+00       0      31       4
+
+TIME      101.0 /     10000     58.312378     [s]
+BloodFlo         0.1330E+05    0.6953E-02    0.5747E-02   -0.2830E-01    0.6486E+00    0.0000E+00
+
+TIME      201.0 /     10000     116.04740     [s]
+BloodFlo         0.1509E+05    0.2039E-02    0.6044E-02   -0.3544E-01    0.5481E+00    0.0000E+00
+
+TIME      301.0 /     10000     173.78242     [s]
+BloodFlo         0.1567E+05    0.6577E-03    0.5336E-02   -0.3606E-01    0.5245E+00    0.0000E+00      23       0       0
+
+TIME      401.0 /     10000     231.51746     [s]
+BloodFlo         0.1595E+05   -0.1214E-03    0.4854E-02   -0.3610E-01    0.4404E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000000500.pvtu
+
+TIME      501.0 /     10000     289.25247     [s]
+BloodFlo         0.1598E+05   -0.5085E-03    0.4674E-02   -0.3462E-01    0.4185E+00    0.0000E+00
+
+TIME      601.0 /     10000     346.98752     [s]
+BloodFlo         0.1598E+05   -0.4684E-03    0.4581E-02   -0.3345E-01    0.4260E+00    0.0000E+00
+
+TIME      701.0 /     10000     404.72253     [s]
+BloodFlo         0.1604E+05   -0.2879E-03    0.4582E-02   -0.3293E-01    0.4318E+00    0.0000E+00
+
+TIME      801.0 /     10000     462.45755     [s]
+BloodFlo         0.1613E+05   -0.1798E-03    0.4566E-02   -0.3264E-01    0.4397E+00    0.0000E+00
+
+TIME      901.0 /     10000     520.19257     [s]
+BloodFlo         0.1623E+05   -0.1333E-03    0.4533E-02   -0.3242E-01    0.4470E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000001000.pvtu
+
+____________________________________________________________________________________________________
+                       Mass            Jx            Jy            Jz          Vmax        T-Temp       SimErrs
+____________________________________________________________________________________________________
+
+TIME     1001.0 /     10000     577.92761     [s]
+BloodFlo         0.1630E+05   -0.1327E-03    0.4491E-02   -0.3222E-01    0.4532E+00    0.0000E+00
+
+TIME     1101.0 /     10000     635.66266     [s]
+BloodFlo         0.1636E+05   -0.1489E-03    0.4450E-02   -0.3204E-01    0.4578E+00    0.0000E+00
+
+TIME     1201.0 /     10000     693.39764     [s]
+BloodFlo         0.1640E+05   -0.1672E-03    0.4418E-02   -0.3190E-01    0.4609E+00    0.0000E+00
+
+TIME     1301.0 /     10000     751.13269     [s]
+BloodFlo         0.1642E+05   -0.1815E-03    0.4395E-02   -0.3180E-01    0.4629E+00    0.0000E+00
+
+TIME     1401.0 /     10000     808.86774     [s]
+BloodFlo         0.1643E+05   -0.1911E-03    0.4381E-02   -0.3173E-01    0.4641E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000001500.pvtu
+
+TIME     1501.0 /     10000     866.60272     [s]
+BloodFlo         0.1644E+05   -0.1969E-03    0.4372E-02   -0.3169E-01    0.4647E+00    0.0000E+00
+
+TIME     1601.0 /     10000     924.33777     [s]
+BloodFlo         0.1644E+05   -0.2003E-03    0.4368E-02   -0.3166E-01    0.4651E+00    0.0000E+00
+
+TIME     1701.0 /     10000     982.07281     [s]
+BloodFlo         0.1644E+05   -0.2024E-03    0.4365E-02   -0.3165E-01    0.4652E+00    0.0000E+00
+
+TIME     1801.0 /     10000     1039.8079     [s]
+BloodFlo         0.1644E+05   -0.2038E-03    0.4364E-02   -0.3165E-01    0.4653E+00    0.0000E+00
+
+TIME     1901.0 /     10000     1097.5428     [s]
+BloodFlo         0.1644E+05   -0.2049E-03    0.4364E-02   -0.3165E-01    0.4653E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000002000.pvtu
+
+____________________________________________________________________________________________________
+                       Mass            Jx            Jy            Jz          Vmax        T-Temp       SimErrs
+____________________________________________________________________________________________________
+
+TIME     2001.0 /     10000     1155.2778     [s]
+BloodFlo         0.1644E+05   -0.2059E-03    0.4364E-02   -0.3165E-01    0.4653E+00    0.0000E+00
+
+TIME     2101.0 /     10000     1213.0129     [s]
+BloodFlo         0.1644E+05   -0.2068E-03    0.4365E-02   -0.3165E-01    0.4653E+00    0.0000E+00
+
+TIME     2201.0 /     10000     1270.7479     [s]
+BloodFlo         0.1644E+05   -0.2077E-03    0.4365E-02   -0.3165E-01    0.4653E+00    0.0000E+00
+
+TIME     2301.0 /     10000     1328.4829     [s]
+BloodFlo         0.1644E+05   -0.2087E-03    0.4365E-02   -0.3166E-01    0.4652E+00    0.0000E+00
+
+TIME     2401.0 /     10000     1386.2180     [s]
+BloodFlo         0.1644E+05   -0.2096E-03    0.4366E-02   -0.3166E-01    0.4652E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000002500.pvtu
+
+TIME     2501.0 /     10000     1443.9530     [s]
+BloodFlo         0.1644E+05   -0.2105E-03    0.4366E-02   -0.3166E-01    0.4651E+00    0.0000E+00
+
+TIME     2601.0 /     10000     1501.6880     [s]
+BloodFlo         0.1644E+05   -0.2114E-03    0.4367E-02   -0.3167E-01    0.4651E+00    0.0000E+00
+
+TIME     2701.0 /     10000     1559.4231     [s]
+BloodFlo         0.1644E+05   -0.2123E-03    0.4367E-02   -0.3167E-01    0.4651E+00    0.0000E+00
+
+TIME     2801.0 /     10000     1617.1581     [s]
+BloodFlo         0.1643E+05   -0.2132E-03    0.4368E-02   -0.3168E-01    0.4650E+00    0.0000E+00
+
+TIME     2901.0 /     10000     1674.8931     [s]
+BloodFlo         0.1643E+05   -0.2141E-03    0.4368E-02   -0.3168E-01    0.4650E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000003000.pvtu
+
+____________________________________________________________________________________________________
+                       Mass            Jx            Jy            Jz          Vmax        T-Temp       SimErrs
+____________________________________________________________________________________________________
+
+TIME     3001.0 /     10000     1732.6282     [s]
+BloodFlo         0.1643E+05   -0.2150E-03    0.4369E-02   -0.3168E-01    0.4649E+00    0.0000E+00
+
+TIME     3101.0 /     10000     1790.3632     [s]
+BloodFlo         0.1643E+05   -0.2159E-03    0.4369E-02   -0.3169E-01    0.4649E+00    0.0000E+00
+
+TIME     3201.0 /     10000     1848.0981     [s]
+BloodFlo         0.1643E+05   -0.2168E-03    0.4370E-02   -0.3169E-01    0.4648E+00    0.0000E+00
+
+TIME     3301.0 /     10000     1905.8333     [s]
+BloodFlo         0.1643E+05   -0.2177E-03    0.4370E-02   -0.3170E-01    0.4648E+00    0.0000E+00
+
+TIME     3401.0 /     10000     1963.5682     [s]
+BloodFlo         0.1643E+05   -0.2185E-03    0.4371E-02   -0.3170E-01    0.4648E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000003500.pvtu
+
+TIME     3501.0 /     10000     2021.3032     [s]
+BloodFlo         0.1643E+05   -0.2194E-03    0.4371E-02   -0.3170E-01    0.4647E+00    0.0000E+00
+
+TIME     3601.0 /     10000     2079.0383     [s]
+BloodFlo         0.1643E+05   -0.2202E-03    0.4371E-02   -0.3171E-01    0.4647E+00    0.0000E+00
+
+TIME     3701.0 /     10000     2136.7732     [s]
+BloodFlo         0.1642E+05   -0.2211E-03    0.4372E-02   -0.3171E-01    0.4646E+00    0.0000E+00
+
+TIME     3801.0 /     10000     2194.5083     [s]
+BloodFlo         0.1642E+05   -0.2219E-03    0.4372E-02   -0.3172E-01    0.4646E+00    0.0000E+00
+
+TIME     3901.0 /     10000     2252.2434     [s]
+BloodFlo         0.1642E+05   -0.2228E-03    0.4373E-02   -0.3172E-01    0.4645E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000004000.pvtu
+
+____________________________________________________________________________________________________
+                       Mass            Jx            Jy            Jz          Vmax        T-Temp       SimErrs
+____________________________________________________________________________________________________
+
+TIME     4001.0 /     10000     2309.9783     [s]
+BloodFlo         0.1642E+05   -0.2236E-03    0.4373E-02   -0.3172E-01    0.4645E+00    0.0000E+00
+
+TIME     4101.0 /     10000     2367.7134     [s]
+BloodFlo         0.1642E+05   -0.2245E-03    0.4374E-02   -0.3173E-01    0.4645E+00    0.0000E+00
+
+TIME     4201.0 /     10000     2425.4485     [s]
+BloodFlo         0.1642E+05   -0.2253E-03    0.4374E-02   -0.3173E-01    0.4644E+00    0.0000E+00
+
+TIME     4301.0 /     10000     2483.1833     [s]
+BloodFlo         0.1642E+05   -0.2261E-03    0.4375E-02   -0.3174E-01    0.4644E+00    0.0000E+00
+
+TIME     4401.0 /     10000     2540.9185     [s]
+BloodFlo         0.1642E+05   -0.2269E-03    0.4375E-02   -0.3174E-01    0.4643E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000004500.pvtu
+
+TIME     4501.0 /     10000     2598.6536     [s]
+BloodFlo         0.1642E+05   -0.2278E-03    0.4376E-02   -0.3174E-01    0.4643E+00    0.0000E+00
+
+TIME     4601.0 /     10000     2656.3884     [s]
+BloodFlo         0.1641E+05   -0.2286E-03    0.4376E-02   -0.3175E-01    0.4642E+00    0.0000E+00
+
+TIME     4701.0 /     10000     2714.1235     [s]
+BloodFlo         0.1641E+05   -0.2294E-03    0.4376E-02   -0.3175E-01    0.4642E+00    0.0000E+00
+
+TIME     4801.0 /     10000     2771.8586     [s]
+BloodFlo         0.1641E+05   -0.2302E-03    0.4377E-02   -0.3175E-01    0.4642E+00    0.0000E+00
+
+TIME     4901.0 /     10000     2829.5935     [s]
+BloodFlo         0.1641E+05   -0.2310E-03    0.4377E-02   -0.3176E-01    0.4641E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000005000.pvtu
+
+____________________________________________________________________________________________________
+                       Mass            Jx            Jy            Jz          Vmax        T-Temp       SimErrs
+____________________________________________________________________________________________________
+
+TIME     5001.0 /     10000     2887.3286     [s]
+BloodFlo         0.1641E+05   -0.2318E-03    0.4378E-02   -0.3176E-01    0.4641E+00    0.0000E+00
+
+TIME     5101.0 /     10000     2945.0637     [s]
+BloodFlo         0.1641E+05   -0.2326E-03    0.4378E-02   -0.3176E-01    0.4640E+00    0.0000E+00
+
+TIME     5201.0 /     10000     3002.7986     [s]
+BloodFlo         0.1641E+05   -0.2333E-03    0.4379E-02   -0.3177E-01    0.4640E+00    0.0000E+00
+
+TIME     5301.0 /     10000     3060.5337     [s]
+BloodFlo         0.1641E+05   -0.2341E-03    0.4379E-02   -0.3177E-01    0.4640E+00    0.0000E+00
+
+TIME     5401.0 /     10000     3118.2688     [s]
+BloodFlo         0.1641E+05   -0.2349E-03    0.4379E-02   -0.3178E-01    0.4639E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000005500.pvtu
+
+TIME     5501.0 /     10000     3176.0037     [s]
+BloodFlo         0.1641E+05   -0.2357E-03    0.4380E-02   -0.3178E-01    0.4639E+00    0.0000E+00
+
+TIME     5601.0 /     10000     3233.7388     [s]
+BloodFlo         0.1640E+05   -0.2364E-03    0.4380E-02   -0.3178E-01    0.4638E+00    0.0000E+00
+
+TIME     5701.0 /     10000     3291.4739     [s]
+BloodFlo         0.1640E+05   -0.2372E-03    0.4381E-02   -0.3179E-01    0.4638E+00    0.0000E+00
+
+TIME     5801.0 /     10000     3349.2087     [s]
+BloodFlo         0.1640E+05   -0.2379E-03    0.4381E-02   -0.3179E-01    0.4638E+00    0.0000E+00
+
+TIME     5901.0 /     10000     3406.9438     [s]
+BloodFlo         0.1640E+05   -0.2387E-03    0.4381E-02   -0.3179E-01    0.4637E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000006000.pvtu
+
+____________________________________________________________________________________________________
+                       Mass            Jx            Jy            Jz          Vmax        T-Temp       SimErrs
+____________________________________________________________________________________________________
+
+TIME     6001.0 /     10000     3464.6790     [s]
+BloodFlo         0.1640E+05   -0.2394E-03    0.4382E-02   -0.3180E-01    0.4637E+00    0.0000E+00
+
+TIME     6101.0 /     10000     3522.4138     [s]
+BloodFlo         0.1640E+05   -0.2402E-03    0.4382E-02   -0.3180E-01    0.4636E+00    0.0000E+00
+
+TIME     6201.0 /     10000     3580.1489     [s]
+BloodFlo         0.1640E+05   -0.2409E-03    0.4383E-02   -0.3180E-01    0.4636E+00    0.0000E+00
+
+TIME     6301.0 /     10000     3637.8840     [s]
+BloodFlo         0.1640E+05   -0.2416E-03    0.4383E-02   -0.3181E-01    0.4636E+00    0.0000E+00
+
+TIME     6401.0 /     10000     3695.6189     [s]
+BloodFlo         0.1640E+05   -0.2424E-03    0.4383E-02   -0.3181E-01    0.4635E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000006500.pvtu
+
+TIME     6501.0 /     10000     3753.3540     [s]
+BloodFlo         0.1640E+05   -0.2431E-03    0.4384E-02   -0.3181E-01    0.4635E+00    0.0000E+00
+
+TIME     6601.0 /     10000     3811.0891     [s]
+BloodFlo         0.1639E+05   -0.2438E-03    0.4384E-02   -0.3182E-01    0.4635E+00    0.0000E+00
+
+TIME     6701.0 /     10000     3868.8240     [s]
+BloodFlo         0.1639E+05   -0.2445E-03    0.4385E-02   -0.3182E-01    0.4634E+00    0.0000E+00
+
+TIME     6801.0 /     10000     3926.5591     [s]
+BloodFlo         0.1639E+05   -0.2453E-03    0.4385E-02   -0.3182E-01    0.4634E+00    0.0000E+00
+
+TIME     6901.0 /     10000     3984.2942     [s]
+BloodFlo         0.1639E+05   -0.2460E-03    0.4385E-02   -0.3183E-01    0.4633E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000007000.pvtu
+
+____________________________________________________________________________________________________
+                       Mass            Jx            Jy            Jz          Vmax        T-Temp       SimErrs
+____________________________________________________________________________________________________
+
+TIME     7001.0 /     10000     4042.0291     [s]
+BloodFlo         0.1639E+05   -0.2467E-03    0.4386E-02   -0.3183E-01    0.4633E+00    0.0000E+00
+
+TIME     7101.0 /     10000     4099.7642     [s]
+BloodFlo         0.1639E+05   -0.2474E-03    0.4386E-02   -0.3183E-01    0.4633E+00    0.0000E+00
+
+TIME     7201.0 /     10000     4157.4990     [s]
+BloodFlo         0.1639E+05   -0.2481E-03    0.4387E-02   -0.3184E-01    0.4632E+00    0.0000E+00
+
+TIME     7301.0 /     10000     4215.2344     [s]
+BloodFlo         0.1639E+05   -0.2488E-03    0.4387E-02   -0.3184E-01    0.4632E+00    0.0000E+00
+
+TIME     7401.0 /     10000     4272.9692     [s]
+BloodFlo         0.1639E+05   -0.2494E-03    0.4387E-02   -0.3184E-01    0.4632E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000007500.pvtu
+
+TIME     7501.0 /     10000     4330.7041     [s]
+BloodFlo         0.1639E+05   -0.2501E-03    0.4388E-02   -0.3185E-01    0.4631E+00    0.0000E+00
+
+TIME     7601.0 /     10000     4388.4395     [s]
+BloodFlo         0.1639E+05   -0.2508E-03    0.4388E-02   -0.3185E-01    0.4631E+00    0.0000E+00
+
+TIME     7701.0 /     10000     4446.1743     [s]
+BloodFlo         0.1638E+05   -0.2515E-03    0.4388E-02   -0.3185E-01    0.4630E+00    0.0000E+00
+
+TIME     7801.0 /     10000     4503.9092     [s]
+BloodFlo         0.1638E+05   -0.2522E-03    0.4389E-02   -0.3186E-01    0.4630E+00    0.0000E+00
+
+TIME     7901.0 /     10000     4561.6445     [s]
+BloodFlo         0.1638E+05   -0.2528E-03    0.4389E-02   -0.3186E-01    0.4630E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000008000.pvtu
+
+____________________________________________________________________________________________________
+                       Mass            Jx            Jy            Jz          Vmax        T-Temp       SimErrs
+____________________________________________________________________________________________________
+
+TIME     8001.0 /     10000     4619.3794     [s]
+BloodFlo         0.1638E+05   -0.2535E-03    0.4390E-02   -0.3186E-01    0.4629E+00    0.0000E+00
+
+TIME     8101.0 /     10000     4677.1143     [s]
+BloodFlo         0.1638E+05   -0.2542E-03    0.4390E-02   -0.3187E-01    0.4629E+00    0.0000E+00
+
+TIME     8201.0 /     10000     4734.8496     [s]
+BloodFlo         0.1638E+05   -0.2548E-03    0.4390E-02   -0.3187E-01    0.4629E+00    0.0000E+00
+
+TIME     8301.0 /     10000     4792.5845     [s]
+BloodFlo         0.1638E+05   -0.2555E-03    0.4391E-02   -0.3187E-01    0.4628E+00    0.0000E+00
+
+TIME     8401.0 /     10000     4850.3193     [s]
+BloodFlo         0.1638E+05   -0.2561E-03    0.4391E-02   -0.3188E-01    0.4628E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000008500.pvtu
+
+TIME     8501.0 /     10000     4908.0547     [s]
+BloodFlo         0.1638E+05   -0.2568E-03    0.4391E-02   -0.3188E-01    0.4628E+00    0.0000E+00
+
+TIME     8601.0 /     10000     4965.7896     [s]
+BloodFlo         0.1638E+05   -0.2574E-03    0.4392E-02   -0.3188E-01    0.4627E+00    0.0000E+00
+
+TIME     8701.0 /     10000     5023.5244     [s]
+BloodFlo         0.1638E+05   -0.2581E-03    0.4392E-02   -0.3188E-01    0.4627E+00    0.0000E+00
+
+TIME     8801.0 /     10000     5081.2598     [s]
+BloodFlo         0.1637E+05   -0.2587E-03    0.4392E-02   -0.3189E-01    0.4627E+00    0.0000E+00
+
+TIME     8901.0 /     10000     5138.9946     [s]
+BloodFlo         0.1637E+05   -0.2594E-03    0.4393E-02   -0.3189E-01    0.4626E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000009000.pvtu
+
+____________________________________________________________________________________________________
+                       Mass            Jx            Jy            Jz          Vmax        T-Temp       SimErrs
+____________________________________________________________________________________________________
+
+TIME     9001.0 /     10000     5196.7295     [s]
+BloodFlo         0.1637E+05   -0.2600E-03    0.4393E-02   -0.3189E-01    0.4626E+00    0.0000E+00
+
+TIME     9101.0 /     10000     5254.4648     [s]
+BloodFlo         0.1637E+05   -0.2606E-03    0.4393E-02   -0.3190E-01    0.4626E+00    0.0000E+00
+
+TIME     9201.0 /     10000     5312.1997     [s]
+BloodFlo         0.1637E+05   -0.2612E-03    0.4394E-02   -0.3190E-01    0.4625E+00    0.0000E+00
+
+TIME     9301.0 /     10000     5369.9346     [s]
+BloodFlo         0.1637E+05   -0.2619E-03    0.4394E-02   -0.3190E-01    0.4625E+00    0.0000E+00
+
+TIME     9401.0 /     10000     5427.6699     [s]
+BloodFlo         0.1637E+05   -0.2625E-03    0.4394E-02   -0.3191E-01    0.4624E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000009500.pvtu
+
+TIME     9501.0 /     10000     5485.4048     [s]
+BloodFlo         0.1637E+05   -0.2631E-03    0.4395E-02   -0.3191E-01    0.4624E+00    0.0000E+00
+
+TIME     9601.0 /     10000     5543.1396     [s]
+BloodFlo         0.1637E+05   -0.2637E-03    0.4395E-02   -0.3191E-01    0.4624E+00    0.0000E+00
+
+TIME     9701.0 /     10000     5600.8750     [s]
+BloodFlo         0.1637E+05   -0.2643E-03    0.4395E-02   -0.3191E-01    0.4623E+00    0.0000E+00
+
+TIME     9801.0 /     10000     5658.6099     [s]
+BloodFlo         0.1637E+05   -0.2649E-03    0.4396E-02   -0.3192E-01    0.4623E+00    0.0000E+00
+
+TIME     9901.0 /     10000     5716.3447     [s]
+BloodFlo         0.1637E+05   -0.2655E-03    0.4396E-02   -0.3192E-01    0.4623E+00    0.0000E+00
+ ...writing vtk file: DIRDATA_BloodFlow/VTK/T0000010000.pvtu
+
+____________________________________________________________________________________________________
+                       Mass            Jx            Jy            Jz          Vmax        T-Temp       SimErrs
+____________________________________________________________________________________________________
+
+TIME    10001.0 /     10000     5774.0801     [s]
+BloodFlo         0.1636E+05   -0.2661E-03    0.4396E-02   -0.3192E-01    0.4622E+00    0.0000E+00
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Final                Max. Resident Memory: 0 MB      Shared Memory: 0 MB     Unshared Memory: 0 MB
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+             --------- END OF TIME CYCLE --------- 
+
+TOTAL TIME (PREPARE+SIM)       56.706218 Seconds
+TOTAL TIME (SIM)               56.140330 Seconds
+
+********** GLOBAL TIMINGS (full simulation) **********
+
+Time Share       Section                        Routine     Time/Call[s]      #Calls  MinTime[s]  MaxTime[s]
+   ( 53.0%)           [93mLB[0m              [91m collinoiseMoveSS[0m        0.311E-02       10001   0.289E-02   0.311E-02
+   ( 19.4%)           [93mLB[0m                        [91mcontent[0m        0.114E-02       10001   0.997E-04   0.114E-02
+   ( 18.0%)           [93mLB[0m                     [91m hvarFluid[0m        0.106E-02       10001   0.104E-02   0.106E-02
+   (  6.3%)           [93mLB[0m                 [91m buildforcemix[0m        0.367E-03       10001   0.227E-03   0.367E-03
+   (  5.5%)           [93mLB[0m               [91m write_field_vtk[0m        0.324E-03       10001   0.253E-03   0.324E-03
+   (  1.4%)           [93mLB[0m               [91m bc_inlet_outlet[0m        0.818E-04       10002   0.520E-06   0.818E-04
+   (  0.0%)           [93mLB[0m                      [91mhvarFluid[0m        0.523E-02           1   0.172E-02   0.523E-02
+   (  0.0%)           [93mLB[0m         [91m stop_com_fluid_specie[0m        0.481E-06       10001   0.420E-06   0.481E-06
+   (  0.0%)           [93mLB[0m         [91m do_cap_velocity_fluid[0m        0.472E-06       10001   0.372E-06   0.472E-06
+   (  0.0%)           [93mLB[0m                     [91m bariFluid[0m        0.462E-06       10002   0.361E-06   0.462E-06
+   (  0.0%)           [93mLB[0m                [91m fluid_dump_out[0m        0.443E-06       10001   0.398E-06   0.443E-06
+   (  0.0%)           [93mLB[0m           [91m PrecollinoiseMoveSS[0m        0.441E-06       10001   0.424E-06   0.441E-06
+   (  0.0%)      [93mTRACKER[0m                 [91m tracker_fluid[0m        0.346E-04         101   0.948E-06   0.346E-04
+   (  0.0%)      [93mTRACKER[0m        [91m tracker_register_fluid[0m        0.261E-05           1   0.183E-05   0.261E-05
+
+(  0.0%) LB    0.00     sec/call, 0 calls,   0.00     calls/step
+
+(  0.0%) TRACKER    0.00     sec/call, 0 calls,   0.00     calls/step
+
+Sum of section timings:       0.000
+
+
+  Stopping.... msg: Program natural ending on 17/04/2019   Time:13:33
+

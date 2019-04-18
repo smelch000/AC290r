@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
 import sys,os,time,math,logging
-import argparse
-
 from myvtk import *
 try:
         import numpy

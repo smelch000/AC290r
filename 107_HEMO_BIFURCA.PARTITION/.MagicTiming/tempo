@@ -2,14 +2,20 @@
 
 ********** GLOBAL TIMINGS (full simulation) **********
 
-   ( 64.2%)                    LB                         write_field_vtk        0.669E-03       20002   0.669E-03   0.669E-03
-   ( 29.6%)                    LB                  collinoisemove_new_gpu        0.616E-03       10001   0.616E-03   0.616E-03
-   (  6.2%)               TRACKER                           tracker_fluid        0.127E-01         101   0.127E-01   0.127E-01
-   (  0.0%)                    LB                          fluid_dump_out        0.456E-06       10001   0.456E-06   0.456E-06
-   (  0.0%)                    LB                               hvarFluid        0.450E-02           1   0.450E-02   0.450E-02
-   (  0.0%)                    LB                         bc_inlet_outlet        0.586E-03           1   0.586E-03   0.586E-03
-   (  0.0%)               TRACKER                  tracker_register_fluid        0.284E-05           1   0.284E-05   0.284E-05
-   (  0.0%)                    LB                               bariFluid        0.101E-05           1   0.101E-05   0.101E-05
+   ( 63.8%)                    LB                        collinoiseMoveSS        0.979E-02       10001   0.979E-02   0.979E-02
+   ( 23.2%)                    LB                               hvarFluid        0.356E-02       10001   0.356E-02   0.356E-02
+   (  8.0%)                    LB                           buildforcemix        0.123E-02       10001   0.123E-02   0.123E-02
+   (  4.0%)                    LB                         write_field_vtk        0.610E-03       10001   0.610E-03   0.610E-03
+   (  0.9%)                    LB                         bc_inlet_outlet        0.140E-03       10002   0.140E-03   0.140E-03
+   (  0.0%)               TRACKER                           tracker_fluid        0.775E-04         101   0.775E-04   0.775E-04
+   (  0.0%)                    LB                                 content        0.618E-06       10001   0.618E-06   0.618E-06
+   (  0.0%)                    LB                     PrecollinoiseMoveSS        0.489E-06       10001   0.489E-06   0.489E-06
+   (  0.0%)                    LB                               bariFluid        0.466E-06       10002   0.466E-06   0.466E-06
+   (  0.0%)                    LB                          fluid_dump_out        0.433E-06       10001   0.433E-06   0.433E-06
+   (  0.0%)                    LB                               hvarFluid        0.403E-02           1   0.403E-02   0.403E-02
+   (  0.0%)                    LB                   stop_com_fluid_specie        0.402E-06       10001   0.402E-06   0.402E-06
+   (  0.0%)                    LB                   do_cap_velocity_fluid        0.399E-06       10001   0.399E-06   0.399E-06
+   (  0.0%)               TRACKER                  tracker_register_fluid        0.220E-05           1   0.220E-05   0.220E-05
 
 (  0.0%) LB    0.00     sec/call, 0 calls,   0.00     calls/step
 

@@ -50,36 +50,6 @@ class Mesh:
         self.o_globs = None
         # M.MOEBIUS.muphy2wrapper_init(mycomm=0)
 
-    def assembleUnstructuredGridPointLike(self):
-
-        def makeugrid(itppp_):
-
-            ugrid = vtkUnstructuredGrid()
-
-            points = vtkPoints()
-            vert = vtkVertex() # only points/vertexes - no cells
-            cells = vtkCellArray()
-            for n, i4 in np.ndenumerate(itppp_):
-                i, j, k = self.ijk(i4)
-                points.InsertNextPoint(i, j, k)
-                vert.GetPointIds().SetId(0, n[0])
-                cells.InsertNextCell(vert)
-            ugrid.SetPoints(points)
-            ugrid.SetCells(VTK_VERTEX, cells)
-            return ugrid
-
-        ug_f = makeugrid(self.itppp_f)
-        ug_w = makeugrid(self.itppp_w)
-        ug_i = makeugrid(self.itppp_i)
-        ug_o = makeugrid(self.itppp_o)
-
-        #if self.itppp_f.size>0: self.addarray_unstructuredgrid(ug_f, self.ID_FLUIDNODE)
-        #if self.itppp_w.size>0: self.addarray_unstructuredgrid(ug_w, self.ID_WALLNODE)
-        #if self.itppp_i.size>0: self.addarray_unstructuredgrid(ug_i, self.ID_INLETNODE)
-        #if self.itppp_o.size>0: self.addarray_unstructuredgrid(ug_o, self.ID_OUTLETNODE)
-
-        return ug_f, ug_w, ug_i, ug_o
-
     #
     # function nodes as lists and stores internally as numpy arrays
     def specifyNodes(self,itp_f,itp_w,itp_i,itp_o,i_id=None,o_id=None,i_globs=None,o_globs=None):
@@ -105,10 +75,9 @@ class Mesh:
 
         return
 
+    #
+    # function to read a .hdr/.dat file (aka bgkflag.hdr/bgkflag.dat)
     def box_strides(self):
-        """
-        computes stride as (nx+2) and (nx+2)*(ny+2) 
-        """
 
         self.nxy2 = long(long(self.nx+2)*long(self.ny+2))
         self.nx2 = long(self.nx+2)
@@ -116,11 +85,11 @@ class Mesh:
         # array of points
         self.nv = long(self.nx+1)*long(self.ny+1)*long(self.nz+1)
 
+    #
+    # function to read a .hdr/.dat file (aka bgkflag.hdr/bgkflag.dat)
     def loadMOEBIUSinput(self,filehdr,filedat):
-        """
-        function to read a .hdr/.dat file
-        """
 
+        ##################
         print 'reading mesh header file:',filehdr
 
         h = open(filehdr,'r')
@@ -209,9 +178,6 @@ class Mesh:
     #
     # function to load a unstructured grid file
     def loadfile_unstructuredgrid_VTK(self,fname):
-        """
-        load unstructured grid as .vtk file and return data
-        """
 
         grid = vtkUnstructuredGridReader()
         grid.SetFileName(fname)
@@ -220,9 +186,6 @@ class Mesh:
         return grid.GetOutput()
 
     def loadfile_unstructuredgrid_VTU(self,fname):
-        """
-        load unstructured grid as .vtu file and return data
-        """
 
         grid = vtkXMLUnstructuredGridReader()
         grid.SetFileName(fname)
@@ -231,29 +194,34 @@ class Mesh:
         return grid.GetOutput()
 
     def writefile_unstructuredgrid_VTK(self,fname,grid):
-        """
-        write unstructured grid as .vtk file
-        """
 
         writer = vtkUnstructuredGridWriter()
+     
         writer.SetFileName(fname)
-        writer.SetInputData(grid)
+     
+        if VTK_MAJOR_VERSION <= 5:
+            writer.SetInput(grid)
+        else:
+            writer.SetInputData(grid)
+     
         writer.Write()
 
     def writefile_unstructuredgrid_VTU(self,fname,grid):
-        """
-        write unstructured grid as .vtu file
-        """
 
         writer = vtkXMLUnstructuredGridWriter()
+     
         writer.SetFileName(fname)
-        writer.SetInputData(grid)
+     
+        if VTK_MAJOR_VERSION <= 5:
+            writer.SetInput(grid)
+        else:
+            writer.SetInputData(grid)
+     
         writer.Write()
 
+    #
+    # function to load a csv file containinkg i,j,k mesh points (and optionally a pre-index)
     def loadfile_csv(self,fname):
-        """
-        load a csv file containinkg i,j,k mesh points (and optionally a pre-index)
-        """
 
         with open(fname,'r') as csvfile:
             reader = csv.reader(csvfile,delimiter=',')
@@ -288,10 +256,9 @@ class Mesh:
 
         return ijk
 
+    #
+    # function to read a mesh_transform.inp file (legacy)
     def loadtransformfile(self,filename):
-        """
-        read a mesh_transform.inp file (legacy)
-        """
 
         print 'reading mesh transform file:',filename
 
@@ -311,10 +278,9 @@ class Mesh:
 
         return scale,translate
 
+    #
+    # binary search in sorted array
     def binsearch(self,nlst, lst, value):
-        """
-        binary search in sorted array
-        """
         lo, hi = 0, nlst-1
         while lo < hi:
             mid = (lo + hi) / 2
@@ -324,10 +290,9 @@ class Mesh:
                 hi = mid
         return lo
 
+    #
+    # binary search in sorted array
     def binsearch_fast(self, nlst, lst, value):
-        """
-        binary search in sorted array - fast version
-        """
 
         # numpy version
         out = np.searchsorted(lst, value)
@@ -343,10 +308,9 @@ class Mesh:
 
         return out
 
+    #
+    # extract i or j or k from a i4 number
     def ijkdir(self,idir,i4):
-        """
-        extract i or j or k from a i4 number
-        """
         
         iz = int(i4/ self.nxy2)
         if idir==3: return iz
@@ -356,10 +320,9 @@ class Mesh:
         
         return int(i4 - iz*self.nxy2 - iy*self.nx2)
 
+    #
+    # extract i,j,k from a i4 number
     def ijk(self,i4):
-        """
-        extract i,j,k from a i4 number
-        """
         
         d = [-1,-1,-1]
 
@@ -368,10 +331,9 @@ class Mesh:
         d[0] = int(i4 - d[2]*self.nxy2 - d[1]*self.nx2)
         return d
 
+    #
+    # extract i,j,k from a i4 number
     def ijklist(self,i4list):
-        """
-        extract i,j,k from a i4 number
-        """
         
         dlist = []
         # for i in xrange(i4list.size):
@@ -381,16 +343,13 @@ class Mesh:
 
         return dlist
 
+    #
+    # extract i4 from i,j,k
     def i4back(self,i,j,k):
-        """
-        extract i4 from i,j,k
-        """
         return long(long(k)*self.nxy2 + long(j)*self.nx2 + long(i))
 
+    # function to write a .xyz file
     def writexyz(self,fname):
-        """
-        write .xyz file
-        """
 
         f = open(fname,'w')
         f.write('%d \n\n' % (self.nfluid + self.nwall + self.ninlet + self.noutlet))
@@ -417,11 +376,9 @@ class Mesh:
 
         f.close()
 
+    # function to write a .hdr/.dat file (aka bgkflag.hdr/bgkflag.dat)
+    # This should consider the cell centers !!!
     def VTU_to_MOEBIUSmesh(self,UG):
-        """
-        # write .hdr/.dat files starting from a unstructured grid
-        # This should consider the cell centers !!!
-        """
 
         print '\nin VTU_to_MOEBIUSmesh:',UG.GetNumberOfPoints()
 
@@ -499,10 +456,8 @@ class Mesh:
                 self.itppp_o[self.noutlet] = i4
                 self.noutlet += 1
 
+    # function to write a .hdr/.dat file (aka bgkflag.hdr/bgkflag.dat)
     def writeMOEBIUSinput(self,fileout,iohead=None):
-        """
-        write .hdr/.dat files
-        """
 
         filehdr = fileout+'.hdr'
         filedat = fileout+'.dat'
@@ -579,10 +534,9 @@ class Mesh:
             io.writeMOEBIUSinput(fileios,iohead)
             return False
 
+    #
+    # function to add value to the unstructured vtk grid
     def addarray_unstructuredgrid(self,ug,val):
-        """
-        add value to the unstructured vtk grid
-        """
 
         idxarr = vtk.vtkUnsignedShortArray()
         # idxarr = vtk.vtkIntArray()
@@ -594,11 +548,12 @@ class Mesh:
 
         ug.GetPointData().AddArray(idxarr)
 
+
+    #
+    # function to create a unstructured vtk grid from a ijk
+    # 
+    # the conversion should consider the conversion from center to enclosing cell
     def make_unstructuredgrid(self,ijk):
-        """
-        create an unstructured vtk grid from a ijk 
-        NB the conversion should consider the conversion from center to enclosing cell
-        """
 
         classname = self.__class__.__name__
         funcname = self.make_unstructuredgrid.__name__
@@ -625,7 +580,7 @@ class Mesh:
 
         grid.SetPoints(points)
 
-        Lib = ctypes.CDLL( os.path.join( os.getenv("MOEBIUS_ROOT"), "BACKEND/SCRIPTS/TOOLS/points2cells.so") )
+        Lib = ctypes.CDLL( os.path.join( os.getenv("MOEBIUS_BIN"), "TOOLS/points2cells.so") )
 
         ijk1 = (ctypes.c_int*NN)()
         ijk2 = (ctypes.c_int*NN)()
@@ -662,10 +617,8 @@ class Mesh:
 
         return grid
 
+    # hacked from paraview core
     def clean_unstructuredgrid(self,input):
-        """
-        # hacked from paraview core
-        """
 
         output= vtkUnstructuredGrid()
 
@@ -728,11 +681,12 @@ class Mesh:
      
         return output
 
+
+
+    #
+    # boolean of two unstructured grids made of voxels.
+    # (can be generalized to other type of cells)
     def bool_unstructuredgrid(self,grid1,grid2,what):
-        """
-        boolean of two unstructured grids made of voxels.
-        (can be generalized to other type of cells)
-        """
 
         classname = self.__class__.__name__
         funcname = self.bool_unstructuredgrid.__name__
@@ -853,11 +807,10 @@ class Mesh:
         return ugrid
 
 
+    #
+    # boolean of two unstructured grids made of voxels.
+    # (can be generalized to other type of cells)
     def bool_unstructuredgrid2(self,grid1,grid2,what):
-        """
-        boolean of two unstructured grids made of voxels.
-        (can be generalized to other type of cells)
-        """
 
         classname = self.__class__.__name__
         funcname = self.bool_unstructuredgrid2.__name__
@@ -989,10 +942,10 @@ class Mesh:
 
         return ugrid
 
+
+    #
+    # boolean of two unstructured grids made of vertices only. it neglects info about cell identity
     def bool_unstructuredgrid_nonfluid(self,grid1,grid2,what):
-        """
-        boolean of two unstructured grids made of vertices only. it neglects info about cell identity
-        """
 
         classname = self.__class__.__name__
         funcname = self.bool_unstructuredgrid_nonfluid.__name__
@@ -1237,22 +1190,22 @@ class Mesh:
         return grid
     """
 
+    #
+    # function to create a unstructured vtk grid from a ijk : only points and no cells
     def make_simple_unstructuredgrid(self,ijk):
-        """
-        create and return unstructured vtk grid from ijk (NON-numpy): only points and no cells
-        """
 
         classname = self.__class__.__name__
         funcname = self.make_simple_unstructuredgrid.__name__
+        # print '....in class:',classname, '....in function:',funcname
 
-        ugrid = vtkUnstructuredGrid()
+        grid = vtkUnstructuredGrid()
 
         points = vtkPoints()
 
         NN = len(ijk[:,0])
      
         if NN<=0:
-            print 'Error: zero size of ijk array in class:',classname
+            print 'Error: zero size of ijk array in class:',classname,'func:',funcname
             sys.exit(1)
      
         # old style, only points/vertexes - no cells
@@ -1266,16 +1219,15 @@ class Mesh:
             vert.GetPointIds().SetId(0,n)
             cells.InsertNextCell(vert)
 
-        ugrid.SetPoints(points)
+        grid.SetPoints(points)
 
-        ugrid.SetCells(VTK_VERTEX,cells)
+        grid.SetCells(VTK_VERTEX,cells)
      
-        return ugrid
+        return grid
 
+    #
+    # function to write mesh in legacy vtk style
     def hashcols(self):
-        """
-        associate node index to scalar values
-        """
 
         # unfortunately th lookuptable only works in the 0-1 range
         # self.node2hashval = {1: 0.2, 2: 0.4, 3: 0.6, 4: 0.8}
@@ -1290,10 +1242,9 @@ class Mesh:
                              4 : [ 0.68, 0.42, 0.51, 1.00 ]}
         """
 
-    def writeVTK(self, fname, ijkf, fieldval=None):
-        """
-        write legacy .vtk file from i,j,k,flag quadruplet (numpy array)
-        """
+    #
+    # function to write a legacy vtk meshfile from a i,j,k,flag quadruplet
+    def writeVTK(self,fname,ijkf):
      
         outf = open(fname, 'w')
      
@@ -1335,7 +1286,7 @@ class Mesh:
 
         print >> outf, ''
         print >> outf, 'POINT_DATA', NN
-        print >> outf, 'SCALARS muphynode short'
+        print >> outf, 'SCALARS muphynode short 1'
         # print >> outf, 'SCALARS muphynode int 1'
         # print >> outf, 'SCALARS muphynode float 1'
 
@@ -1365,49 +1316,11 @@ class Mesh:
                                                                     self.node2colors[index][3]/4.0)
         """
 
-        if fieldval != None:
-            print >> outf, 'SCALARS fieldnode short'
-            print >> outf, 'LOOKUP_TABLE default'
-            for index in xrange(NN):
-                print >> outf, fieldval
-                # print >> outf, '{0:1.1f}'.format(self.node2hashval[ijkf[index,3]])
-
         outf.close()
 
-    def assembleVTP(self, ijkf, spacing=1, fieldval=None):
-  
-        NN = ijkf.shape[0]
-
-        points = vtkPoints()
-
-        pnodetype = vtkUnsignedShortArray()
-        pnodetype.SetName("muphynode")
-        pnodetype.SetNumberOfComponents(1)
-
-        if fieldval != None:
-            fval = vtkUnsignedShortArray()
-            fval.SetName("fieldval")
-            fval.SetNumberOfComponents(1)
-
-        for index in range(NN):
-            i, j, k, flg = ijkf[index,0], ijkf[index,1], ijkf[index,2], ijkf[index,3]
-            points.InsertNextPoint (i, j, k)
-            pnodetype.InsertNextValue( flg )
-            if fieldval != None:
-                fval.InsertNextValue( fieldval )
-
-        polydata = vtkPolyData()
-        polydata.SetPoints(points)
-        polydata.GetPointData().AddArray(pnodetype)
-        if fieldval != None:
-            polydata.GetPointData().AddArray(fval)
-
-        return polydata
-
-    def assembleVTU(self, ijkf, spacing=1):
-        """
-        assemble the numpy ijk array as an unstructured mesh
-        """
+    #
+    # function to write a ijk sequence as a flat vtk unstructured mesh
+    def writeVTU(self,vtufile,ijkf,spacing=1):
 
         if self.nx + self.ny + self.nz == 0:
             print 'Error: zero nx,ny,nz in writeVTU!'
@@ -1564,109 +1477,29 @@ class Mesh:
         ## cleanFilter.SetInputConnection(ugrid.GetOutputPort());
         #cleanFilter.SetInput(ugrid)
         #cleanFilter.Update()
-
-        return ugrid
      
-    def meshfileToPolyData(self, MESHFNAME, spacing=1, fieldval=None):
-
-        # open the .dat file
-        try:
-            meshf = open(MESHFNAME + '.dat','r')
-            print >> sys.stderr, 'Reading mesh file...', MESHFNAME + '.dat'
-            # start_time = time.time()
-        except IOError:
-            print >> sys.stderr, "Cannot find file", MESHFNAME+'.dat'
-            sys.exit(1)
-
-        # msh = Mesh()
-
-        self.hashcols()
-
-        meshdata = list()
-        meshdataWIO = list()
-
-        # start_time = time.time()
-
-
-        for line in meshf.readlines():
-
-            fields = tuple(line.split())
-
-            meshdata.append( (int(fields[0]), int(fields[1]), int(fields[2]), int(fields[3])) )
-
-            if int(fields[3]) == 1: continue # exclude fluid nodes
-            # if int(fields[3]) == 3: continue # exclude inlet nodes
-            # if int(fields[3]) == 4: continue # exclude outlet nodes
-
-            meshdataWIO.append( (int(fields[0]), int(fields[1]), int(fields[2]), int(fields[3])) )
-
-        meshf.close()
-        # print >> sys.stderr, "done", time.time()-start_time, "secs"
-
-        # write_time = time.time()
-        # print >> sys.stderr, "done", time.time()-write_time, "secs"
-        # print >> sys.stderr, "Total time:", time.time()-start_time, "secs"
-
-        ijkf = np.zeros([len(meshdataWIO),4],dtype='int')
-        n = 0
-        for i,j,k,f in meshdataWIO:
-            ijkf[n,:] = i,j,k,f
-            n += 1
-
-        pd = self.assembleVTP(ijkf, spacing=spacing, fieldval=fieldval)
-
-        return pd
-
-    def writeCombinedVTP(self, vtpfile, pds):
-
-        appendFilter = vtkAppendPolyData()
-        for pd in pds:
-            appendFilter.AddInputData(pd)
-        appendFilter.Update();
-
-        writer = vtkXMLPolyDataWriter()
-        writer.SetFileName(vtpfile)
-        writer.SetDataModeToAscii()
-        writer.SetInputData(appendFilter.GetOutput())
-        writer.Write()
-
-    def writeVTP(self, vtpfile, ijkf, spacing=1, fieldval=None):
-        """
-        write a numpy ijk array as a flat vtk unstructured mesh
-        """
-
-        polydata = self.assembleVTP(ijkf, spacing=spacing, fieldval=fieldval)
-
-        writer = vtkXMLPolyDataWriter()
-        writer.SetFileName(vtpfile)
-        writer.SetDataModeToAscii()
-        writer.SetInputData(polydata)
-        writer.Write()
-
-    def writeVTU(self,vtufile,ijkf,spacing=1):
-        """
-        write a numpy ijk array as a flat vtk unstructured mesh
-        """
-
-        ugrid = self.assembleVTU(ijkf, spacing)
-
         writer = vtkXMLUnstructuredGridWriter()
+     
         writer.SetFileName(vtufile)
         writer.SetDataModeToAscii()
-        writer.SetInputData(ugrid)
+     
+        if VTK_MAJOR_VERSION <= 5:
+            writer.SetInput(ugrid)
+        else:
+            writer.SetInputData(ugrid)
+     
         writer.Write()
 
-    def assembleVTM(self):
-        """
-        assemble a multiblock with fluids, wall, inlets, outlets and arrays to identify them
-        """
+    #
+    # function to write a multiblock .vtm file
+    def writeVTM(self,fileout):
 
-        print 'assemblying multiblock... '
+        print 'writing multiblock .vtm file... '
 
         if len(self.ijk_f) + len(self.ijk_w) + len(self.ijk_i) + len(self.ijk_o) == 0:
 
             if len(self.itppp_f) + len(self.itppp_w) + len(self.itppp_i) + len(self.itppp_o) == 0:
-                print 'Error: both itppp and ijk arrays are empty in _writeVTM !'
+                print 'Error: both itppp and ijk arrays are empty in writeVTM !'
                 sys.exit(1)
 
             # convert itppp into ijk
@@ -1734,32 +1567,26 @@ class Mesh:
         # gather all into the multiblock structure
         group = vtkMultiBlockDataGroupFilter()
      
-        if self.nfluid>0:  group.AddInputData(fluid)
-        if self.nwall>0:   group.AddInputData(wall)
-        if self.ninlet>0:  group.AddInputData(inlet)
-        if self.noutlet>0: group.AddInputData(outlet)
+        if VTK_MAJOR_VERSION<=5:
+            if self.nfluid>0:  group.AddInput(fluid)
+            if self.nwall>0:   group.AddInput(wall)
+            if self.ninlet>0:  group.AddInput(inlet)
+            if self.noutlet>0: group.AddInput(outlet)
+        else:
+            if self.nfluid>0:  group.AddInputData(fluid)
+            if self.nwall>0:   group.AddInputData(wall)
+            if self.ninlet>0:  group.AddInputData(inlet)
+            if self.noutlet>0: group.AddInputData(outlet)
         # group.AddInputConnection(fluid.GetOutputPort())
 
         group.Update()
-
-        return group
      
-    def writeVTM(self,fileout):
-        """
-        write a multiblock .vtm file
-        """
-
-        print 'writing multiblock .vtm file ... '
-        group = self.assembleVTM()
-
         writer = vtkXMLMultiBlockDataWriter()
         writer.SetFileName(fileout)
         writer.SetInputConnection(group.GetOutputPort())
         writer.Update()
 
     def convert_ijk_2_itppp(self,ijk):
-        """
-        """
 
         itppp = np.zeros(ijk.shape[0],dtype='i8')
         n = 0
@@ -1769,8 +1596,6 @@ class Mesh:
         return itppp
 
     def convert_itppp_2_ijk(self,itppp):
-        """
-        """
 
         n = itppp.shape[0]
         ijk = np.zeros((n,3),dtype='i')

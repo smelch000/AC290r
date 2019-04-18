@@ -286,11 +286,7 @@ class AtomHandler:
   # Return the tuple with the names of all molecular types as the keys of a dictionary
   # in which the value is a list containing the configuration lines
   # of the corresponding atoms in CONFIG section (it is EMPTY
-<<<<<<< HEAD
-  # for _Wall 'molecule') and the order in which he molecular
-=======
   # for _Wall 'molecule') and the order in which the molecular
->>>>>>> master
   # types are read from self.filename.
   # @returns {molecule name: [atom configuration]},[order of names]
   def getMolecularTypeNamesAndConf(self):
@@ -671,13 +667,8 @@ class AtomHandler:
     il=iter(open(PDBfile,'r').readlines())
     if not FirstCalpha:
       l=self.__jumpTo('ATOM',il) #.split()
-<<<<<<< HEAD
-      if l and len(l)>47:
-        x_o,y_o,z_o= float(l[31:(31+8)]),float(l[39:(39+8)]),float(l[47:(47+8)])
-=======
       if l and len(l)>PDBATOMZ:
         x_o,y_o,z_o= float(l[PDBATOMX:(PDBATOMX+8)]),float(l[PDBATOMY:(PDBATOMY+8)]),float(l[PDBATOMZ:(PDBATOMZ+8)])
->>>>>>> master
       else:
         sys.stderr.write("Error: unable to read ATOM coordinates from "+PDBfile+"\n")
         sys.exit(1)
@@ -685,13 +676,8 @@ class AtomHandler:
       l=self.__jumpTo('ATOM',il) #.split()
       while True:
         if l.split()[2]=="CA":
-<<<<<<< HEAD
-          if l and len(l)>47:
-            x_o,y_o,z_o= float(l[31:(31+8)]),float(l[39:(39+8)]),float(l[47:(47+8)])
-=======
           if l and len(l)>PDBATOMZ:
             x_o,y_o,z_o= float(l[PDBATOMX:(PDBATOMX+8)]),float(l[PDBATOMY:(PDBATOMY+8)]),float(l[PDBATOMZ:(PDBATOMZ+8)])
->>>>>>> master
           else:
             sys.stderr.write("Error: unable to read ATOM coordinates from "+PDBfile+"\n")
             sys.exit(1)
@@ -803,7 +789,3 @@ class AtomHandler:
     return False
   
 
-<<<<<<< HEAD
-=======
-
->>>>>>> master

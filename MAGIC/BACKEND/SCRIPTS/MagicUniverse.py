@@ -1,8 +1,7 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
-import sys,os,stat
+import sys,os
 
-import ctypes
 from ctypes import *
 import socket
 import pickle
@@ -13,9 +12,8 @@ import tempfile
 import argparse
 import time
 import threading
+import logging
 import resource
-import io
-import Mlogging
 
 try:
     import muphy2graphics as M2G
@@ -27,6 +25,9 @@ try: # c_bool defined from python 2.5 on
 except:
     c_bool=c_int
 
+def initlog(level=logging.INFO):
+    logging.basicConfig(level=level, format='[%(levelname)s] (%(threadName)-10s) %(message)s',)
+
 """
 module for muphy2
 """
@@ -34,100 +35,78 @@ module for muphy2
 class Empty():
     pass
 
-Magic = None
-
+XPU = 'cpu'
+SOCKET = False
 M = Empty()
+##########################################
+
+def MagicBegins(serialrun=False):
+    """
+    parse and init
+    """
+
+    global XPU,SOCKET
+
+    initlog(level=logging.DEBUG)
+
+    # Completely replace the stdout file descriptor for this process and any 
+    # subprocesses, we can even capture output from child processes.
+    # os.dup2(stdout, 1)
+    # print read_pipe()
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-x', '--xpu',     required=False, default='cpu', help='device [cpu/gpu]')
+    parser.add_argument('-s', '--socket',  required=False, default='no',  help='socket port active [yes/no]')
+    parser.add_argument('-p', '--preproc', required=False, default=None,  help='parallel preprocessing [int]')
+    args = parser.parse_args()
+
+    XPU = args.xpu
+
+    try:
+        MENV = os.path.join(os.environ.get('MUPHY_ROOT'), 'GMUPHY')
+        MU = True
+    except:
+        MENV = os.path.join(os.environ.get('MOEBIUS_ROOT'), 'BACKEND', 'SHOP')
+        MU = False
+
+    if XPU != 'cpu' and XPU != 'gpu':
+        logging.debug( 'xpu:' + XPU + '...not of the right kind!' )
+        sys.exit(1)
+
+    elif XPU == 'cpu':
+        if MU:
+            THELIB = os.path.join( MENV, 'libmuphy2.so')
+        else:
+            THELIB = os.path.join( MENV, 'libmoebius.so')
+
+    elif XPU == 'gpu':
+        if MU:
+            THELIB = os.path.join( MENV, 'libmuphy2.gpu.so')
+        else:
+            THELIB = os.path.join( MENV, 'libmoebius.gpu.so')
+
+    if not os.path.isfile(THELIB):
+        logging.debug( 'Muphy shared library does not exist:' + THELIB )
+        sys.exit(1)
+
+    # instance the muphy object
+    M.MUPHY = CDLL(THELIB, RTLD_GLOBAL)
+
+
+    if args.socket=='yes':
+        SOCKET = True
+    elif args.socket=='no':
+        SOCKET = False
+
+    if args.preproc:
+        preprocess_parallel_mesh( int(args.preproc) )
+        sys.exit(1)
+
+    muphy2wrapper_init(mycomm=0,serialrun=c_int(serialrun))
 
 ##########################################
 
-# def MagicBegins(serialrun=False):
-class MagicBegins():
-
-    def __init__(self, serialrun=False):
-        global Magic
-
-        """
-        parse and init
-        """
-
-        Magic = self
-
-        self.XPU = 'cpu'
-        self.SOCKET = False
-        self.MUPHYorMOBIUS = '__None__'
-
-        f = open('.MagicPid','w')
-        # print >> f, os.getpid()
-        f.write( str(os.getpid()) )
-        f.close()
-
-        # Completely replace the stdout file descriptor for this process and any 
-        # subprocesses, we can even capture output from child processes.
-        # os.dup2(stdout, 1)
-        # print read_pipe()
-
-        parser = argparse.ArgumentParser()
-
-        parser.add_argument('-x', '--xpu',     required=False, default='cpu', help='device [cpu/gpu]')
-        parser.add_argument('-d', '--debug',  required=False, default='no',  help='debug output [yes/no]')
-        parser.add_argument('-p', '--preproc', required=False, default=None,  help='parallel preprocessing on given number of tasks [int]')
-        # parser.add_argument('-s', '--socket',  required=False, default='no',  help='socket port active [yes/no]')
-        args = parser.parse_args()
-
-        Mlogging.Mlogging(args.debug)
-
-        # done with logging defs
-
-        self.XPU = args.xpu
-
-        try:
-            MENV = os.path.join(os.environ.get('MUPHY_ROOT'), 'EXECUTE')
-            self.MUPHYorMOBIUS = 'Muphy'
-        except:
-            MENV = os.path.join(os.environ.get('MOEBIUS_ROOT'), 'BACKEND', 'SHOP')
-            self.MUPHYorMOBIUS = 'Moebius'
-
-        if self.XPU != 'cpu' and self.XPU != 'gpu':
-            Mlogging.Mlogging.debug( 'xpu:' + self.XPU + '...not of the right kind!' )
-            sys.exit(1)
-
-        elif self.XPU == 'cpu':
-            if self.MUPHYorMOBIUS == 'Muphy':
-                THELIB = os.path.join( MENV, 'libmuphy2.so')
-            elif self.MUPHYorMOBIUS == 'Moebius':
-                THELIB = os.path.join( MENV, 'libmoebius.so')
-
-        elif self.XPU == 'gpu':
-            if self.MUPHYorMOBIUS == 'Muphy':
-                THELIB = os.path.join( MENV, 'libmuphy2.gpu.so')
-            elif self.MUPHYorMOBIUS == 'Moebius':
-                THELIB = os.path.join( MENV, 'libmoebius.gpu.so')
-
-        if not os.path.isfile(THELIB):
-            print('Shared library does not exist:' + THELIB,' ... Halting')
-            Mlogging.Mlogging.debug( 'Shared library does not exist:' + THELIB )
-            sys.exit(1)
-
-        M.MUPHY = CDLL(THELIB, RTLD_GLOBAL)
-
-        #f = io.BytesIO()
-        #with Mlogging.stdout_redirector(f):
-        #    print('foobar')
-        #    print(12)
-        #    M.MUPHY.testprint()
-        #    os.system('echo and this is from echo')
-
-        self.SOCKET = False
-        #if args.socket=='yes':
-        #    self.SOCKET = True
-
-        if args.preproc:
-            preprocess_parallel_mesh( int(args.preproc) )
-            sys.exit(1)
-
-        muphy2wrapper_init(mycomm=0,serialrun=c_int(serialrun))
-
-##########################################
 
 def muphy2wrapper_init(mycomm=0,serialrun=False):
     """
@@ -135,18 +114,14 @@ def muphy2wrapper_init(mycomm=0,serialrun=False):
     -> M.MUPHY.muphy2wrapper_init
     """
 
-    global Magic
+    global SOCKET,XPU
 
-    Mlogging.Mlogging.debug( 'Run starts on host: ' + socket.gethostname() )
+    logging.debug( 'Muphy starts on host: ' + socket.gethostname() + '\n' )
 
-    # M.fill_muphy_object(version='2', xpu=Magic.XPU)
+    # M.fill_muphy_object(version='2', xpu=XPU)
 
-    try:
-        if Magic.SOCKET:
-            M.set_socket_params()
-    except:
-        Magic.SOCKET=False
-        pass
+    if SOCKET:
+        M.set_socket_params()
 
     # M.MUPHY.muphy2wrapper_init(mycomm,len(str),str)
 
@@ -154,13 +129,13 @@ def muphy2wrapper_init(mycomm=0,serialrun=False):
 
     if get_numprocs() >  1: return
 
-    if Magic.SOCKET:
+    if SOCKET:
         try:
             M.req_q = mxqueue.MXQueue()
             sock = MySocket(M.req_q)
         except:
-            print('socket already in use....not connecting')
-            Magic.SOCKET=False
+            print 'socket already in use....not connecting'
+            SOCKET=False
 
 def print_resource_usage(msg): 
 
@@ -171,6 +146,8 @@ def print_resource_usage(msg):
 
     usage = resource.getrusage(resource.RUSAGE_SELF)
 
+    print 
+    print 100*'~'
     # for name, desc in [
     #     ('ru_utime', 'User time'),
     #     ('ru_stime', 'System time'),
@@ -183,16 +160,11 @@ def print_resource_usage(msg):
     #     ]:
     #     print '%-25s (%-10s) = %s' % (desc, name, getattr(usage, name))
 
-    allmsg = '%-20s %-20s: %d MB      %-13s: %d MB     %-15s: %d MB' % \
+    print '%-20s %-20s: %d MB      %-13s: %d MB     %-15s: %d MB' % \
                         (msg, 'Max. Resident Memory', int(getattr(usage, 'ru_maxrss')/1048576.),
                          'Shared Memory', int(getattr(usage, 'ru_ixrss')/1048576.),
                          'Unshared Memory', int(getattr(usage, 'ru_idrss')/1048576.))
-
-    print(100*'~')
-    print(allmsg)
-    print(100*'~')
-
-    Mlogging.Mlogging.info( allmsg )
+    print 100*'~'
 
 def MagicEnds(): 
     """
@@ -206,7 +178,7 @@ def MagicEnds():
 
     del M.MUPHY
 
-    print('Magic ends, bye.')
+    print 'Muphy ends, bye.'
 
 ##########################################
 def get_myproc():
@@ -214,9 +186,8 @@ def get_myproc():
     get my processor
     """
     myproc = (c_int*1)()
-
+    # M.MUPHY.get_myproc(byref(myproc))
     M.MUPHY.getMyproc(byref(myproc))
-
     return myproc[0]
 ##########################################
 def get_numprocs():
@@ -249,20 +220,20 @@ def sumpara(x):
         n = len(x)
         if type(x[0]) == int:
             x_ = (c_int*n)()
-            for i in range(n):
+            for i in xrange(n):
                 x_[i] = x[i]
             M.MUPHY.sum_dd_ai(c_int(n), byref(x_))
 
         elif type(x[0]) == float:
             x_ = (c_float*n)()
-            for i in range(n):
+            for i in xrange(n):
                 x_[i] = x[i]
             M.MUPHY.sum_dd_a(c_int(n), byref(x_))
 
         return x_
 
     else:
-        print('Hard Stop in sumpara')
+        print 'Hard Stop in sumpara'
         sys.exit(1)
 
 ################################
@@ -312,7 +283,7 @@ class MuArray(object):
         if isinstance(key, int) :
             if key < 0: key += len(self)
             if key < 0 or key >= len(self): 
-                raise IndexError() # , "Index (%d) out of range" % key
+                raise IndexError, "Index (%d) out of range" % key
             v = (self.c_PRC*1)()
             M.MUPHY.getElementMuArray_float(self.ptr, c_int(key), byref(v))
             return v[0]
@@ -320,7 +291,7 @@ class MuArray(object):
         elif isinstance(key, slice) :
             v = (self.c_PRC*1)()
             vv = []
-            for index in range(*key.indices(len(self))):
+            for index in xrange(*key.indices(len(self))):
                 M.MUPHY.getElementMuArray_float(self.ptr, c_int(index), byref(v))
                 vv.append(v[0])
             return vv
@@ -329,11 +300,11 @@ class MuArray(object):
         if isinstance(key, int) :
             if key < 0: key += len(self)
             if key < 0 or key >= len(self): 
-                raise IndexError() # , "Index (%d) out of range" % key
+                raise IndexError, "Index (%d) out of range" % key
             M.MUPHY.setElementMuArray_float(self.ptr, c_int(key), self.c_PRC(v))
 
         elif isinstance(key, slice) :
-            for index in range(*key.indices(len(self))):
+            for index in xrange(*key.indices(len(self))):
                 M.MUPHY.setElementMuArray_float(self.ptr, c_int(index), self.c_PRC(v))
 
     def __len__(self):
@@ -395,7 +366,7 @@ class Universe(object):
         self.connectAllMeshesDone = False
         
         if unitsystem != 'MKS':
-            print('Only MKS system allowed')
+            print 'Only MKS system allowed'
             sys.exit(1)
 
         self.unitsystem = unitsystem
@@ -470,7 +441,7 @@ class Universe(object):
                 self.trackList.append(item) # in-scale tracker
 
         else:
-            print('addItem: Item not recognized')
+            print 'addItem: Item not recognized'
 
     def setPeriod(self,val): 
         """
@@ -572,11 +543,11 @@ class Universe(object):
 
         # if voxm + voxcm + voxmm + voxLchar > 1:
         if num_args > 1:
-            print('multiple conflicting arguments in setResolution')
+            print 'multiple conflicting arguments in setResolution'
             sys.exit(1)
         # elif voxm + voxcm + voxmm + voxLchar == 0:
         elif num_args == 0:
-            print('no argument in setResolution')
+            print 'no argument in setResolution'
             sys.exit(1)
 
         if voxm != None:
@@ -594,13 +565,13 @@ class Universe(object):
         elif voxLchar != None:
 
             if self.Lchar == None:
-                print('set characteristic length first !')
+                print 'set characteristic length first !'
                 sys.exit(1)
 
             self.Resolution = voxLchar / self.Lchar 
 
         else:
-            print('specify resolution in voxm,voxcm,voxmm or voxLchar !')
+            print 'specify resolution in voxm,voxcm,voxmm or voxLchar !'
             sys.exit(1)
 
         self.Dx = 1. / self.Resolution # in MKS
@@ -743,29 +714,29 @@ class Universe(object):
             if myid == 0:
 
                 print
-                print( '============================================================================================ ')
+                print  '============================================================================================ '
                 print
-                print( '                              CFD Characteristic Quantities')
-                print('Characteristic Length       %10.4g [m]    ' % self.Lchar)
-                print('Voxelization Density        %10g [Vox/Lch]' % (self.Resolution * self.Lchar),)
-                print(                             '%10g [Vox/m]  ' % self.Resolution,)
-                print(                             '%10g [Vox/cm] ' % (self.Resolution * 0.01))
-                print('Spatial Resolution (Dx)     %10.4g [m]    ' % self.Dx)
-                print('Physical Density            %10.4g [Kg/m3]' % self.PhysicalMassDensity)
-                print('Characteristic Velocity     %10.4g [m/s]  ' % self.Vchar)
-                print('Physical Viscosity          %10.4g [m2/s] ' % self.PhysicalViscosity)
-                print('Simulated Mach              %10.4g        ' % self.Mach)
-                # print('Characteristic Mach       %10.4g        ' % self.Mach)
-                # print('Lattice Sound Speed       %10.4g        ' % self.cs)
+                print  '                              CFD Characteristic Quantities'
+                print 'Characteristic Length       %10.4g [m]    ' % self.Lchar
+                print 'Voxelization Density        %10g [Vox/Lch]' % (self.Resolution * self.Lchar),
+                print                              '%10g [Vox/m]  ' % self.Resolution,
+                print                              '%10g [Vox/cm] ' % (self.Resolution * 0.01)
+                print 'Spatial Resolution (Dx)     %10.4g [m]    ' % self.Dx
+                print 'Physical Density            %10.4g [Kg/m3]' % self.PhysicalMassDensity
+                print 'Characteristic Velocity     %10.4g [m/s]  ' % self.Vchar
+                print 'Physical Viscosity          %10.4g [m2/s] ' % self.PhysicalViscosity
+                print 'Simulated Mach              %10.4g        ' % self.Mach
+                # print 'Characteristic Mach       %10.4g        ' % self.Mach
+                # print 'Lattice Sound Speed       %10.4g        ' % self.cs
                 print
-                print( '                                  Derived Quantities')
-                print('Timestep                    %10.4g [s]    ' % self.Dt)
+                print  '                                  Derived Quantities'
+                print 'Timestep                    %10.4g [s]    ' % self.Dt
                 if self.numberofsteps != None:
-                    print('Total Simulation Time       %10.4g [s]    ' % (self.Dt * self.numberofsteps))
-                print('Lattice Viscosity           %10.4g [LU]   ' % self.LatticeViscosity)
-                print('Lattice Char. Velocity      %10.4g [LU]  ' % ((self.Dt / self.Dx) * self.Vchar))
+                    print 'Total Simulation Time       %10.4g [s]    ' % (self.Dt * self.numberofsteps)
+                print 'Lattice Viscosity           %10.4g [LU]   ' % self.LatticeViscosity
+                print 'Lattice Char. Velocity      %10.4g [LU]  ' % ((self.Dt / self.Dx) * self.Vchar)
                 print
-                print( '============================================================================================ ')
+                print  '============================================================================================ '
                 print
 
             self.Mchar = self.PhysicalMassDensity * self.Dx**3
@@ -872,7 +843,7 @@ class Universe(object):
             self.CoarsestMesh = a
           
         if maxsp == 0: 
-            print('>>> ERROR: undefined mesh spacing. Check Universe.decorate() call. Aborting...\n')
+            print '>>> ERROR: undefined mesh spacing. Check Universe.decorate() call. Aborting...\n'
             sys.exit(1)
 
         if self.linkedScalesMethod == "MultiMesh" : #PM
@@ -880,7 +851,7 @@ class Universe(object):
           """
           for i in range(len(self.scalePath)-1):
             if self.scalePath[i].mesh.getSpacing()<self.scalePath[i+1].mesh.getSpacing():
-              print('In MultiMesh method, scales in linkScales must be given in spacing descending order!\nAborting...')
+              print 'In MultiMesh method, scales in linkScales must be given in spacing descending order!\nAborting...'
               sys.exit(1)
           """
           #PM NOTE: the order in which scales are stored within scalePath is now IRRELEVANT
@@ -946,7 +917,7 @@ class Universe(object):
             if self.mergeVTK.active and self.itime % self.mergeVTK.frequency == 0:
 
                 self.mergeVTK.inputs = []
-                print(self.mergeVTK.influids)
+                print self.mergeVTK.influids
                 for fl in self.mergeVTK.influids:
 
                     self.mergeVTK.inputs.append( 'DIRDATA_' + fl.name + '/VTK/T' + str(self.itime).zfill(10) + '.pvtu' )
@@ -956,7 +927,7 @@ class Universe(object):
                 self.mergeVTKthread = threading.Thread(target=M2G.MergeVTKWorker, args=(self.itime, self.mergeVTK))
                 self.mergeVTKthread.start()
         """
-        for heartbeat in range(self.getPeriod()):
+        for heartbeat in xrange(self.getPeriod()):
 
             self.setHeartBeat(heartbeat)
 
@@ -972,13 +943,13 @@ class Universe(object):
                     scale.update()
                     scale.update()                    
                 else: 
-                    print('Timechart exception! ...aborting job')
+                    print 'Timechart exception! ...aborting job'
                     sys.exit(1)
 
         """
                   
         """
-        for heartbeat in range(self.getPeriod()):
+        for heartbeat in xrange(self.getPeriod()):
             self.setHeartBeat(heartbeat)
 
             for scale in self.scalePath:
@@ -1031,7 +1002,7 @@ class Universe(object):
         # on the COARSEST grid is equal to the steps set by setNumberOfSteps plus one.
         # E.g. if one sets u=Universe; u.setNumberOfSteps(0) then 1 complete step on the
         # COARSEST mesh will be done.
-        for self.itime in range(itime_start, itime_start + ncycle+1):
+        for self.itime in xrange(itime_start, itime_start + ncycle+1):
             self.setItime(self.itime)
             yield self.itime
 
@@ -1040,10 +1011,10 @@ class Universe(object):
     # NOT ScaleList which is set and allocated within Universe.create()
     def linkScales(self,scalePath,method="MultiMesh"):
         if not hasattr(scalePath[0],'ref'):
-            print('>>> ERROR: linkScales has to be called after Universe.create(). Aborting...\n')
+            print '>>> ERROR: linkScales has to be called after Universe.create(). Aborting...\n'
             sys.exit(1)
         if hasattr(self,'scalepathref'):
-            print('>>> WARNING! Scales already linked. linkScales call ignored...')
+            print '>>> WARNING! Scales already linked. linkScales call ignored...'
             return
         #self.checkMeshConnections = True
         """
@@ -1059,7 +1030,7 @@ class Universe(object):
         #PM in MultiMesh context, sort scalePath in mesh spacing descending order
         #PM (useful in Universe.animate and connectAllMeshes)
         if method != "MultiMesh" and method != "":
-            print('>>> ERROR: undefined mesh spacing. Check Universe.decorate() call. Aborting...\n')
+            print '>>> ERROR: undefined mesh spacing. Check Universe.decorate() call. Aborting...\n'
             sys.exit(1)
             
             
@@ -1127,16 +1098,13 @@ class Universe(object):
         spacings=orderedMeshes.keys()
         spacings.sort()
         
-        #DO NOT change connection order! It was carefully arranged!
-        # note that self-connections is done last for each mesh
         for i in range(0,len(spacings)-1):
           self.connectTwoMeshes(orderedMeshes[spacings[i]],orderedMeshes[spacings[i+1]])
           self.connectTwoMeshes(orderedMeshes[spacings[i+1]],orderedMeshes[spacings[i]])
-          #the following does mesh self-connection if enabled in fortran code, otherwise does nothing
           self.connectTwoMeshes(orderedMeshes[spacings[i]],orderedMeshes[spacings[i]])
           
-        #the following does mesh self-connection if enabled in fortran code, otherwise does nothing
         self.connectTwoMeshes(orderedMeshes[spacings[-1]],orderedMeshes[spacings[-1]])
+        #if self.checkMeshConnections==True:
         for i in range(len(self.scalePath)):
           M.MUPHY.checkConnections(self.scalePath[i].ref)
             
@@ -1205,7 +1173,7 @@ class Scale(object):
         """
         self.timechart = timechart
         tc = (c_int*len(timechart))()
-        for i in range(len(timechart)): tc[i] = timechart[i]
+        for i in xrange(len(timechart)): tc[i] = timechart[i]
         M.MUPHY.setTimeChartScale(self.ref, c_int(len(timechart)), byref(tc))
 
     def setTemperature(self,val): 
@@ -1255,7 +1223,7 @@ class Scale(object):
                 trks.append(a)
 
             else:
-                print('error for actors')
+                print 'error for actors'
                 sys.exit(1)
 
         self.tracker = None
@@ -1264,7 +1232,7 @@ class Scale(object):
             self.tracker.addActorsTracker(actors)
 
         elif len(trks) > 1:
-            print('error: a single scale cannot have more than one tracker')
+            print 'error: a single scale cannot have more than one tracker'
             sys.exit(1)
 
         f = get_refs(self.fluids)
@@ -1453,17 +1421,13 @@ class Mesh(object):
 
             f = open(prefix+'.hdr','w')
             print >> f, int(nx),int(ny),int(nz)
-            # f.write( int(nx),int(ny),int(nz) )
             print >> f, 1,int(nx)*int(ny)*int(nz),0,0,0
-            # f.write( 1,int(nx)*int(ny)*int(nz),0,0,0 )
             #f.write('{0:d} {1:d} {2:d}\n'.format(int(nx),int(ny),int(nz)))
             #f.write('{0:d} {1:d} 0 0 0\n'.format(1,int(nx)*int(ny)*int(nz)))
-            print >>f, 1
             f.close()
 
             f = open(prefix+'.dat','w')
-            # print >> f,'-1 -1 -1 -1'
-            f.write( '-1 -1 -1 -1' )
+            print >> f,'-1 -1 -1 -1'
             #f.write('-1 -1 -1 -1\n')
             f.close()
 
@@ -1477,7 +1441,7 @@ class Mesh(object):
         -> M.MUPHY.setFileroot()
         """
         if self.boxsetexplicit:
-            print('conflicting options....box already set explicitly')
+            print 'conflicting options....box already set explicitly'
             return
         M.MUPHY.setFileroot(self.ref, \
                             c_int(len(nameroot)), nameroot)
@@ -1495,7 +1459,7 @@ class Mesh(object):
         -> M.MUPHY.setFilesMesh()
         """
         if self.boxsetexplicit:
-            print('conflicting options....box already set explicitly')
+            print 'conflicting options....box already set explicitly'
             return
         M.MUPHY.setFilesMesh(self.ref, \
                             c_int(len(namehdr)), namehdr, \
@@ -1544,7 +1508,7 @@ class Mesh(object):
         set open/close mesh
         -> M.MUPHY.setSystemExchangeMesh()
         """
-        print('(py) Inactive....call instead setInletOutletMethod')
+        print '(py) Inactive....call instead setInletOutletMethod'
         M.MUPHY.setSystemExchangeMesh(self.ref, c_int(len(name)), name)
     def setGridSpacing(self,val=DEFAULT['GRIDSPACING']):
         """
@@ -1710,7 +1674,7 @@ class Mesh(object):
             return 'OUTLET'
 
         else:
-            print('getLocatorNodeType: node type not recognized:',itype[0])
+            print 'getLocatorNodeType: node type not recognized:',itype[0]
             sys.exit(1)
 
 class Actor(object):
@@ -1728,7 +1692,6 @@ class Fluid(Actor):
                    DUMPINFORMAT = 'unformatted',
                    DUMPOUTFORMAT = 'unformatted',
                    ADR = False,
-                   MOMENTUMFREEZE = False,
                    FREEZE = False,
                    INERT = False,
                    STABILIZEDLB = True,
@@ -1764,7 +1727,6 @@ class Fluid(Actor):
                    CAPFORCES = False,
                    INLETOUTLETMETHOD = ['closed','equilibrium','zouhe'],
                    INLETOUTLETFILE = 'bgkflag.ios',
-                   WBCFILE = 'bgkflag.wbc',
                    DENSITYRANDOMFACTOR = 1.0,
                    SHANCHEN = True,
                    SHANCHENWALL = True,
@@ -1831,17 +1793,10 @@ class Fluid(Actor):
 
     def setADR(self,val=DEFAULT['ADR']): 
         """
-        set ADR flag for fluid
+        set freeze flag for fluid
         -> M.MUPHY.setADRFluid()
         """
         M.MUPHY.setADRFluid(self.ref, c_bool(val))
-
-    def setMomentumFreeze(self,val=DEFAULT['MOMENTUMFREEZE']): 
-        """
-        set momentum freeze flag for fluid
-        -> M.MUPHY.setMomentumFreeze()
-        """
-        M.MUPHY.setMomentumFreezeFluid(self.ref, c_bool(val))
 
     def setFreeze(self,val=DEFAULT['FREEZE']): 
         """
@@ -2124,13 +2079,6 @@ class Fluid(Actor):
         """
         M.MUPHY.setInletOutletFileFluid(self.ref, c_int(len(name)), name)
 
-    def setWBCFile(self,name=DEFAULT['WBCFILE']): 
-        """
-        set inlet/outlet file for fluid
-        -> M.MUPHY.setWBCFileFluid()
-        """
-        M.MUPHY.setWBCFileFluid(self.ref, c_int(len(name)), name)
-
     def setInitialDensityRandomFactor(self,rdf=DEFAULT['DENSITYRANDOMFACTOR']): 
         """
         set randomization factor for initial density
@@ -2271,39 +2219,6 @@ class Fluid(Actor):
         val = (c_float*1)()
         M.MUPHY.getIOValue(self.ref, c_int(len(ioname)), ioname, c_int(ioid), byref(val))
         return val[0]
-
-    def setInletOutletBC(self,ioname,ioid,bctype,iodir=None,val=0.,val_dir=None): 
-        """
-        set inlet/outlet value
-        -> M.MUPHY.setInletOutletBC()
-        """
-        val_dir_ = (c_float*3)()
-        if val_dir==None:
-            if iodir != None:
-                val_dir_[0] = iodir[0] * 1.
-                val_dir_[1] = iodir[1] * 1.
-                val_dir_[2] = iodir[2] * 1.
-            else:
-                val_dir_[0] = -9999.
-                val_dir_[1] = -9999.
-                val_dir_[2] = -9999.
-
-        iodir_ = (c_int*3)()
-        if iodir==None:
-            iodir_[0] = -9999
-            iodir_[1] = -9999
-            iodir_[2] = -9999
-        else:
-            iodir_[0] = iodir[0]
-            iodir_[1] = iodir[1]
-            iodir_[2] = iodir[2]
-
-        M.MUPHY.setInletOutletBC(self.ref, c_int(len(ioname)),ioname, 
-                        c_int(ioid), 
-                        c_int(len(bctype)),bctype,
-                        byref(iodir_),
-                        c_float(val),
-                        byref(val_dir_))
 
     def setIOValue(self,ioname,ioid,val): 
         """
@@ -2527,7 +2442,7 @@ class Fluid(Actor):
         elif aream2 != None:
             i.PhysicalArea = aream2
         else:
-            print('addIn/Outlet interface changed....use aream2 or areamm2 instead')
+            print 'addIn/Outlet interface changed....use aream2 or areamm2 instead'
             sys.exit(1)
 
         i.PhysicalVelocity = None
@@ -2549,7 +2464,7 @@ class Fluid(Actor):
         elif aream2 != None:
             o.PhysicalArea = aream2
         else:
-            print('addIn/Outlet interface changed....use aream2 or areamm2 instead')
+            print 'addIn/Outlet interface changed....use aream2 or areamm2 instead'
             sys.exit(1)
 
         o.PhysicalVelocity = None
@@ -2582,15 +2497,15 @@ class Fluid(Actor):
 
         # grab the inlet
         if not len(self.inlets)==1:
-            print('only a single inlet allowed!')
+            print 'only a single inlet allowed!'
             sys.exit(1)
         else:
             ikey = self.inlets.keys()[0]
             i = self.inlets[ikey]
             if not silent:
-                print('Inlet Velocity:')
-                print('     ',ikey, '    vel:', i.PhysicalVelocity, 'm/s                 ', \
-                          (self.universe.Dt / self.universe.Dx ) * i.PhysicalVelocity, 'l.u.')
+                print 'Inlet Velocity:'
+                print '     ',ikey, '    vel:', i.PhysicalVelocity, 'm/s                 ', \
+                          (self.universe.Dt / self.universe.Dx ) * i.PhysicalVelocity, 'l.u.'
                 print
 
         if self.outletmethod == None:
@@ -2607,7 +2522,7 @@ class Fluid(Actor):
 
             # ck = 0
             if not silent:
-                print('Outlet Velocities:')
+                print 'Outlet Velocities:'
 
             for okey in self.outlets.keys():
 
@@ -2620,15 +2535,15 @@ class Fluid(Actor):
                 # ck += flow
 
                 if not silent:
-                    print('     ',okey, \
+                    print '     ',okey, \
                         'vel:', self.outlets[okey].PhysicalVelocity, 'm/s    ', \
                         (self.universe.Dt / self.universe.Dx ) * o.PhysicalVelocity,'l.u.',\
-                        '   flow:', i.PhysicalFlow, self.outlets[okey].PhysicalFlow)
+                        '   flow:', i.PhysicalFlow, self.outlets[okey].PhysicalFlow
 
             # if not silent: print '\nCheck for equality:',ck,'=',i.PhysicalFlow,'m3/s','\n'
 
         else:
-            print('outlet method unknown:',self.outletmethod)
+            print 'outlet method unknown:',self.outletmethod
             sys.exit(1)
 
 
@@ -2658,11 +2573,11 @@ class Fluid(Actor):
             a_in = self.getIOArea('inlet',id)
 
             if myid == 0 and itime%printfreq == 0: 
-                print('Step:',itime,'id:',id, \
+                print 'Step:',itime,'id:',id, \
                       ' Inlet Press:',p_in, \
                       'Flow:',f_in, \
                       'Area:',a_in, \
-                      'Mean Velocity:',f_in/max(1.e-8,a_in))
+                      'Mean Velocity:',f_in/max(1.e-8,a_in)
 
             if myid ==0 and itime%iofreq == 0:
                 self.monitorfp.write(' %g' % p_in); self.monitorff.write(' %g' % f_in)
@@ -2677,11 +2592,11 @@ class Fluid(Actor):
             a_out = self.getIOArea('outlet',id)
 
             if myid==0 and itime%printfreq==0: 
-                print('Step:',itime,'id:',id, \
+                print 'Step:',itime,'id:',id, \
                       ' Outlet Press:',p_out, \
                       'Flow:',f_out, \
                       'Area:',a_out, \
-                      'Mean Velocity:',f_out/max(1.e-8,a_out))
+                      'Mean Velocity:',f_out/max(1.e-8,a_out)
 
             if myid==0 and itime%iofreq == 0:
                 self.monitorfp.write(' %g' % (p_out)); self.monitorff.write(' %g' % (f_out))
@@ -2697,14 +2612,14 @@ class Fluid(Actor):
             id = self.inlets[key].Id
             bctype = self.getIOBCType('inlet',id)
             if bctype[:8] != 'pressure':
-                print('Inlet BC must be pressure!')
+                print 'Inlet BC must be pressure!'
                 sys.exit(1)
 
         for key in self.outlets.keys():
             id = self.outlets[key].Id
             bctype = self.getIOBCType('outlet',id)
             if bctype[:4] != 'flow':
-                print('Outlet BC must be flow!')
+                print 'Outlet BC must be flow!'
                 sys.exit(1)
 
     def snapshot(self,type,qty,fout):
@@ -2722,11 +2637,11 @@ class Fluid(Actor):
 
         if type == 'probe':
 
-            print('Not implemented yet...just lazy')
+            print 'Not implemented yet...just lazy'
 
         elif type == 'dat' or type == 'line':
 
-            print('Not implemented yet...just lazy')
+            print 'Not implemented yet...just lazy'
 
         elif type == 'map':
 
@@ -2735,7 +2650,7 @@ class Fluid(Actor):
         
         elif type == 'time':
 
-            print('Not implemented yet...just lazy')
+            print 'Not implemented yet...just lazy'
 
 class Atom(Actor):
     """
@@ -3271,7 +3186,7 @@ class Atom(Actor):
         elif cpl=="COUPLE_IMMERSEDBOUNDARY":
           keycpl=5
         else:
-          print('>>> ERROR: undefined coupling method for getDeltaIsoAtom. Aborting...\n')
+          print '>>> ERROR: undefined coupling method for getDeltaIsoAtom. Aborting...\n'
           sys.exit(1)
         
         is_inside=(c_int*1)()
@@ -3422,7 +3337,7 @@ class Atom(Actor):
         elif action == 'gaussian':
             iscale = 2
         else:
-            print('rescale Molecular Velocity can only be scale/gaussian, got:',action)
+            print 'rescale Molecular Velocity can only be scale/gaussian, got:',action
             sys.exit(1)
 
         M.MUPHY.rescaleMolecularVelocityAtom(self.ref, c_int(indmol), c_int(iscale))
@@ -3434,7 +3349,7 @@ class Atom(Actor):
         elif action == 'gaussian':
             iscale = 2
         else:
-            print('rescale Molecular Velocity can only be scale/gaussian, got:',action)
+            print 'rescale Molecular Velocity can only be scale/gaussian, got:',action
             sys.exit(1)
 
         M.MUPHY.rescaleMolecularVelocitiesAtom(self.ref, c_int(iscale))
@@ -3446,7 +3361,7 @@ class Atom(Actor):
         elif action == 'gaussian':
             iscale = 2
         else:
-            print('rescale Molecular Angular Velocity can only be scale/gaussian, got:',action)
+            print 'rescale Molecular Angular Velocity can only be scale/gaussian, got:',action
             sys.exit(1)
 
         M.MUPHY.rescaleMolecularAngularVelocityAtom(self.ref, c_int(indmol), c_int(iscale))
@@ -3458,7 +3373,7 @@ class Atom(Actor):
         elif action == 'gaussian':
             iscale = 2
         else:
-            print('rescale Molecular Angular Velocity can only be scale/gaussian, got:',action)
+            print 'rescale Molecular Angular Velocity can only be scale/gaussian, got:',action
             sys.exit(1)
 
         M.MUPHY.rescaleMolecularAngularVelocitiesAtom(self.ref, c_int(iscale))
@@ -3470,7 +3385,7 @@ class Atom(Actor):
         elif action == 'gaussian':
             iscale = 2
         else:
-            print('rescale  Velocity can only be scale/gaussian, got:',action)
+            print 'rescale  Velocity can only be scale/gaussian, got:',action
             sys.exit(1)
 
         M.MUPHY.rescaleVelocitiesAtom(self.ref, c_int(iscale))
@@ -3765,7 +3680,7 @@ class Tracker(Actor):
         """
 
         if not isinstance(fluid,Fluid):
-            print('setMeasurement requires a Fluid object as argument')
+            print 'setMeasurement requires a Fluid object as argument'
             sys.exit(1)
 
         if action == 'ontime':
@@ -3775,7 +3690,7 @@ class Tracker(Actor):
         elif action == 'rms':
             action_ = 2
         else:
-            print('action can only be: ontime/average/rms ! got :',action)
+            print 'action can only be: ontime/average/rms ! got :',action
             sys.exit(1)
 
         # convert list to ctypes array
@@ -3981,7 +3896,7 @@ class Interact(Actor):
                 for ia in ids:
                     self.a.setSolvation(ia, self.f.id, solvation)
         except:
-            print('Incorrect Atom - Fluid coupling !!',ids,drag,solvation)
+            print 'Incorrect Atom - Fluid coupling !!',ids,drag,solvation
 
         # ... add similar snippets for Fluid - ODE, Atom - ODE, etc.
 
@@ -4000,7 +3915,7 @@ class CrossTracker(Tracker):
             elif isinstance(a,ODE): O = 1
 
         if F + A + O > 1:
-            print('error: crosstrack followees are not homogeneous...',f,a,o )
+            print 'error: crosstrack followees are not homogeneous...',f,a,o 
             sys.exit(1)
 
         self.superfollowees = []
@@ -4044,7 +3959,7 @@ class CrossTracker(Tracker):
 def list(count, p_items):
     """Returns a python list for the given items represented by a pointer and the number of items"""
     items = []
-    for i in range(count):
+    for i in xrange(count):
         items.append(p_items[i])
     return items
 
@@ -4075,7 +3990,7 @@ def get_refs(items):
     ptr = cast(a, POINTER(c_void_p))
     # print 'CONTENTS:',ptr.contents
 
-    for i in range(len(items)):
+    for i in xrange(len(items)):
         # ptr = ptr_add(ptr, i*(sizeof(c_void_p)))
         ptr.contents.value = items[i].ref[0]
         ptr = ptr_add(ptr, (sizeof(c_void_p)))
@@ -4086,18 +4001,17 @@ def get_refs(items):
 
 #########################################
 
-def preprocess_parallel_mesh(ntasks, infileroot='bgkflag'):
+def preprocess_parallel_mesh(ntasks):
 
     for i in range(ntasks):
 
-        f = infileroot + '_'+str(i)+'.dat'
+        f = 'bgkflag_'+str(i)+'.dat'
         if os.path.isfile(f): os.remove(f)
 
-        f = infileroot + '_'+str(i)+'.hdr'
+        f = 'bgkflag_'+str(i)+'.hdr'
         if os.path.isfile(f): os.remove(f)
 
-    # muphy2wrapper_init(mycomm=0) 
-    # MagicBegins(mycomm=0) 
+    muphy2wrapper_init(mycomm=0) 
 
     u = Universe()
     s = Scale()
@@ -4114,7 +4028,6 @@ def preprocess_parallel_mesh(ntasks, infileroot='bgkflag'):
 
     s.set(name='MonoScale', mesh=m,  actors=[f,t])
 
-    m.setFiles(infileroot+'.hdr', infileroot+'.dat', infileroot+'.ios')
     m.setRegularMesh(False)
     m.setWorkAsPreprocessor(True)
     m.setWritePreprocessedMesh(False)
@@ -4128,176 +4041,25 @@ def preprocess_parallel_mesh(ntasks, infileroot='bgkflag'):
     tmpdir = tempfile.mkdtemp(prefix='muphy2TMP') + '/'
 
     # write all side scripts
-    # blddeco_sh   = write_blddeco_sh(tmpdir)
-    # convgraph_sh = write_convgraph_sh(tmpdir)
-    # goscotch_sh  = write_goscotch_sh(tmpdir)
+    blddeco_sh   = write_blddeco_sh(tmpdir)
+    convgraph_sh = write_convgraph_sh(tmpdir)
+    makeownr_sh  = write_makeownr_sh(tmpdir)
+    goscotch_sh  = write_goscotch_sh(tmpdir)
+    mkflgown_pl  = write_mkflgown_pl(tmpdir)
+
     # ...now run all
-    # run_command( blddeco_sh )
-    # run_command( convgraph_sh )
-    # fi = open(os.path.join(tmpdir, 'deco'),'r')
-    # fo = open(os.path.join(tmpdir, 'deco.proscotch'),'w')
-
-    ft = open('deco', 'w')
-    fi = open('nl.out', 'r') # file reports only the number of verices and edges in graph
-    print >> ft, fi.readline().strip()
-    fi.close()
-    fi = open('com.out', 'r') # file reports the i4 of each the 18 node neighbors
-    for line in fi.readlines():
-        print >> ft, line.strip()
-    fi.close()
-    ft.close()
-
-    METIS = True
-    SCOTCH = False
-
-    if   METIS:
-        proc = 'gpmetis %s %d'%('deco', ntasks)
-        print ('Running Metis ...: ', proc)
-        subprocess.call(proc, shell=True)
-        print('...done')
-
-        # paste i4.out deco.part | sort -T. -n > nodeownr.inp
-        fi1 = open('i4.out', 'r')
-        fi2 = open('deco.part.%d'%ntasks , 'r')
-        dct = {}
-        while (True):
-            try:
-                i4 = int( fi1.readline().rstrip() )
-                iproc = int( fi2.readline().rstrip() )
-                dct[i4] = iproc
-            except:
-                break
-        fi1.close()
-        fi2.close()
-
-        fo = open('nodeownr.inp' , 'w')
-        for i4 in sorted (dct.keys()):
-            print >> fo, i4, dct[i4]
-        fo.close()
-
-
-    elif SCOTCH:
-        ft = open('deco', 'r')
-        fo = open('deco.proscotch', 'w') # adds a header and no. of edges per node, needed by scotch
-        line = ft.readline().split()
-        nvert = int(line[0])
-        nedges = int(line[1])
-        print >> fo, '0'
-        print >> fo, nvert, nedges
-        print >> fo, '1 000'
-        for line in ft.readlines():
-            l = line.split()
-            print >> fo, len(l), line.rstrip()
-        ft.close()
-        fo.close()
-
-        proc = 'dgpart %d %s %s'%(ntasks,  'deco.proscotch', 'deco.%d'%ntasks )
-        print('Scotch Running...:', proc)
-        subprocess.Popen(proc, shell=True)
-
-        makeownr_sh  = write_makeownr_sh(tmpdir)
-        run_command( makeownr_sh + ' deco.%d i4.out nodeownr.%d'%(ntasks,ntasks) )
-
-
-    h = open(infileroot + '.hdr', 'r')
-    l = h.readline().split()
-    nx,ny,nz = int(l[0]), int(l[1]), int(l[2])
-
-    l = h.readline().split()
-    nmaj,nfl,nwl,nin,nou = int(l[0]), int(l[1]), int(l[2]), int(l[3]), int(l[4])
-    h.close()
-
-    if nmaj != 5:
-        print('Only operates for majority nodes as deadnodes (5)...halting')
-        sys.exit(1)
-
-    nodes = {}
-    for i in range(ntasks):
-        nodes[i] = []
-
-    nn = nfl + nwl + nin + nou
-    # print 'nfl, nwl, nin, nou:', nfl, nwl, nin, nou, 'ntotal:', nn
-
-    fi = open('nodeownr.inp', 'r')
-    fd = open(infileroot + '.dat', 'r')
-    for n in range(nn) : 
-
-        line = fi.readline().split()
-        i4 = int(line[0])
-        itask = int(line[1])
-
-        k = i4 / ((nx+2)*(ny+2))
-
-        i4 = i4 - (nx+2)*(ny+2)*k
-        j = i4 / (nx+2)
-
-        i = i4 - (nx+2)*j
-
-        line = fd.readline().split()
-        ii,jj,kk,flg = int(line[0]), int(line[1]), int(line[2]), int(line[3])
-
-        if   ii != i: 
-            print('i mismatch', ii,i); sys.exit(1)
-        elif jj != j: 
-            print('j mismatch', jj,j); sys.exit(1)
-        elif kk != k: 
-            print('k mismatch', kk,k); sys.exit(1)
-
-        # print >> n, i4, itask
-        nodes[itask].append([i,j,k,flg])
-    fi.close()
-
-    for itask in range(ntasks):
-
-        nfl,nwl,nin,nou = 0,0,0,0
-        for node in nodes[itask]:
-            i,j,k,flg = node
-            if flg == 1: nfl += 1
-            if flg == 2: nwl += 1
-            if flg == 3: nin += 1
-            if flg == 4: nou += 1
-
-        bh = open( infileroot + '_' + str(itask) + '.hdr', 'w')
-        print >> bh, nx, ny, nz
-        print >> bh, 5, nfl, nwl, nin, nou
-        bh.close()
-
-        bd = open( infileroot + '_' + str(itask) + '.dat', 'w')
-        for node in nodes[itask]:
-            i,j,k,flg = node
-            print >> bd,i,j,k,flg
-        bd.close()
-
-    #mkflgown_pl  = write_mkflgown_pl(tmpdir)
-    #run_command( mkflgown_pl + ' %d bgkflag.hdr bgkflag.dat nodeownr.%d'%(ntasks,ntasks) )
-    #run_command( 'mv nodeownr.%d nodeownr.inp'%(ntasks) )
-
-    run_command( 'rm nl.out com.out i4.out deco' )
-    if METIS:
-        run_command( 'rm deco.part.%d'%(ntasks) )
-    if SCOTCH:
-        run_command( 'rm deco.%d deco.proscotch'%(ntasks) )
-
-    try:
-        import TOOLS.mesh as _mesh
-        # import TOOLS.bgkflag2vtk as cvt
-
-        pds = []
-        msh = _mesh.Mesh()
-        for itask in range(ntasks):
-
-            pd = msh.meshfileToPolyData('bgkflag_%d'%itask, fieldval=itask)
-            pds.append( pd )
-
-        msh.writeCombinedVTP('bgkflag_combined.vtp', pds)
-    
-    except:
-        return
+    run_command( blddeco_sh )
+    run_command( convgraph_sh )
+    run_command( goscotch_sh + ' %d deco.proscotch deco.%d'%(ntasks,ntasks) )
+    run_command( makeownr_sh + ' deco.%d i4.out nodeownr.%d'%(ntasks,ntasks) )
+    run_command( mkflgown_pl + ' %d bgkflag.hdr bgkflag.dat nodeownr.%d'%(ntasks,ntasks) )
+    run_command( 'mv nodeownr.%d nodeownr.inp'%(ntasks) )
+    run_command( 'rm nl.out com.out i4.out deco deco.%d deco.proscotch'%(ntasks) )
 
 def run_command(cmd):
 
-    time.sleep(1)
-    print(cmd)
+    time.sleep(2)
+    print 'Running:\n',cmd,'\n'
     proc = subprocess.call(shlex.split(cmd))
     time.sleep(2)
 
@@ -4316,16 +4078,11 @@ cat nl.out com.out > deco
 """
 
     blddeco_sh = os.path.join(tmpdir,'blddeco.sh')
-    print('...writing file:',blddeco_sh)
+    print '...writing file:',blddeco_sh
     tmpfl = open(blddeco_sh,'w')
-    # print >> tmpfl, text
-    tmpfl.write( text )
+    print >> tmpfl, text
     tmpfl.close()
-    try:
-        os.chmod(blddeco_sh, stat.S_IEXEC)
-    except:
-        pass
-        # os.chmod(blddeco_sh,0744)
+    os.chmod(blddeco_sh,0744)
     return blddeco_sh
 
 def write_convgraph_sh(tmpdir):
@@ -4337,15 +4094,9 @@ OUTPUT=$(%s/convgraph.pl < deco > deco.proscotch)
 
     convgraph_sh = os.path.join(tmpdir,'convgraph.sh')
     tmpfl = open(convgraph_sh,'w')
-    # print >> tmpfl, text
-    tmpfl.write( text )
+    print >> tmpfl, text
     tmpfl.close()
-    try:
-        os.chmod(convgraph_sh,stat.S_IEXEC)
-    except:
-        pass
-        # os.chmod(convgraph_sh,0744)
-    # os.chmod(convgraph_sh,744)
+    os.chmod(convgraph_sh,0744)
 
     text=r"""#!/usr/bin/perl
 use strict;
@@ -4366,17 +4117,11 @@ while(<STDIN>) {
 """
 
     convgraph_pl = os.path.join(tmpdir,'convgraph.pl')
-    print('...writing file:',convgraph_pl)
+    print '...writing file:',convgraph_pl
     tmpfl = open(convgraph_pl,'w')
-    # print >> tmpfl, text
-    tmpfl.write( text )
+    print >> tmpfl, text
     tmpfl.close()
-    try:
-        os.chmod(convgraph_pl,stat.S_IEXEC)
-    except:
-        pass
-        # os.chmod(convgraph_pl,0744)
-    # os.chmod(convgraph_pl,744)
+    os.chmod(convgraph_pl,0744)
 
     return convgraph_sh
 
@@ -4471,17 +4216,11 @@ for($p=0; $p<$ARGV[0]; $p++) {
 }
 """
     mkflgown_pl = os.path.join(tmpdir,'mkflgown.pl')
-    print('...writing file:',mkflgown_pl)
+    print '...writing file:',mkflgown_pl
     tmpfl = open(mkflgown_pl,'w')
-    # print >> tmpfl, text
-    tmpfl.write( text )
+    print >> tmpfl, text
     tmpfl.close()
-    # os.chmod(mkflgown_pl,0744)
-    try:
-        os.chmod(mkflgown_pl,stat.S_IEXEC)
-    except:
-        pass
-        # os.chmod(mkflgown_pl,0744)
+    os.chmod(mkflgown_pl,0744)
 
     return mkflgown_pl
 
@@ -4500,30 +4239,15 @@ tail -n +2 $part | sort -n -T. | cut -f 2 | paste $i4file - | sort -T. -n > $tf
 """
 
     makeownr_sh = os.path.join(tmpdir,'makeownr.sh')
-    print('...writing file:',makeownr_sh)
+    print '...writing file:',makeownr_sh
     tmpfl = open(makeownr_sh,'w')
-    # print >> tmpfl, text
-    tmpfl.write( text )
+    print >> tmpfl, text
     tmpfl.close()
-    try:
-        os.chmod(makeownr_sh,stat.S_IEXEC)
-    except:
-        pass
-        # os.chmod(makeownr_sh,0744)
-    # os.chmod(makeownr_sh,744)
+    os.chmod(makeownr_sh,0744)
 
     return makeownr_sh
 
 def write_goscotch_sh(tmpdir):
-
-    if Magic.MUPHYorMOBIUS == 'Muphy':
-        executable = os.path.join(os.environ.get('MUPHY_ROOT'), 'EXECUTE', 'dgpart')
-
-    elif Magic.MUPHYorMOBIUS == 'Moebius':
-        executable = os.path.join(os.environ.get('MOEBIUS_ROOT'), 'BACKEND', 'SHOP', 'dgpart')
-    else:
-        print ('var undefined', Magic.MUPHYorMOBIUS)
-        sys.exit(1)
 
     text=r"""#!/bin/bash
 
@@ -4538,121 +4262,14 @@ output=$3
 
 # mpirun -np 4 -hostfile ./hostlist ./dgpart $n $input $output
 # ./dgpart $n $input $output
-%s $n $input $output
-""" % executable
-
-# $MUPHY_BIN/dgpart $n $input $output
+$MUPHY_BIN/dgpart $n $input $output
+"""
 
     goscotch_sh = os.path.join(tmpdir,'goscotch.sh')
-    print('...writing file:',goscotch_sh)
+    print '...writing file:',goscotch_sh
     tmpfl = open(goscotch_sh,'w')
-    # print >> tmpfl, text
-    tmpfl.write( text )
+    print >> tmpfl, text
     tmpfl.close()
-    try:
-        os.chmod(goscotch_sh,stat.S_IEXEC)
-    except:
-        pass
-        # os.chmod(goscotch_sh,0744)
-    # os.chmod(goscotch_sh,744)
+    os.chmod(goscotch_sh,0744)
 
     return goscotch_sh
-
-
-def splitParallelDomainsEqualSlabs(nproc=1, splitdir='x', infileroot='bgkflag'):
-    """
-    Method to split a mesh file into x, y or z regions with almost-equal split zones.
-    It does not guarantee the same number of voxels in each slab.
-    Input:  *.hdr/.dat mesh file
-    Output: *_PE.hdr/*_PE.dat files and
-            nodeownr.inp
-    """
-
-    print ('Splitting:', nproc,'parallel domains', \
-          'along:', splitdir, 'direction', \
-          'for mesh files:', infileroot, '.*')
-
-    h = open(infileroot + '.hdr', 'r')
-    l = h.readline()
-    l = l.split()
-    nx,ny,nz = int(l[0]),int(l[1]),int(l[2])
-    h.close()
-
-    n = open('nodeownr.inp','w')
-
-    nodes = {}
-    for i in range(nproc):
-        nodes[i] = []
-
-    iproc = 0
-    mesh = {}
-    nn = 0
-    imn,jmn,kmn = +1e6,+1e6,+1e6
-    imx,jmx,kmx = -1e6,-1e6,-1e6
-
-    d = open(infileroot + '.dat', 'r')
-    for line in d.readlines():
-        l = line.split()
-        i = int(l[0]); j = int(l[1]); k = int(l[2])
-        imn, imx = min(i,imn), max(i,imx)
-        jmn, jmx = min(j,jmn), max(j,jmx)
-        kmn, kmx = min(k,kmn), max(k,kmx)
-    d.close()
-    print ('imn,imx:',imn,imx)
-    print ('jmn,jmx:',jmn,jmx)
-    print ('kmn,kmx:',kmn,kmx)
-
-    d = open(infileroot + '.dat', 'r')
-
-    for line in d.readlines():
-
-        l = line.split()
-        i = int(l[0]); j = int(l[1]); k = int(l[2])
-
-        flg = int(l[3])
-
-        if splitdir == 'x':
-            iproc = (i-imn) / (nx/nproc )
-
-        elif splitdir == 'y':
-            iproc = (j-jmn) / (ny/nproc )
-
-        elif splitdir == 'z':
-            iproc = (k-kmn) / (nz/nproc )
-
-        else:
-            print ('Unrecognized split direction :',splitdir)
-
-        i4 = (nx+2)*(ny+2)*k + (nx+2)*j + i
-        print >> n, i4, iproc
-        nodes[iproc].append([i,j,k,flg])
-        nn += 1
-
-    n.close()
-    d.close()
-
-    label = ['C','N','O','H','X','Y','K','I']
-    fxyz = open('msh.xyz','w')
-    print >> fxyz, nn
-    print >> fxyz
-    for iproc in range(nproc):
-
-        nfl,nwl,nin,nou = 0,0,0,0
-        for node in nodes[iproc]:
-            i,j,k,flg = node
-            if flg == 1: nfl += 1
-            if flg == 2: nwl += 1
-            if flg == 3: nin += 1
-            if flg == 4: nou += 1
-
-        bh = open( infileroot + '_' + str(iproc) + '.hdr', 'w')
-        print >> bh,nx,ny,nz
-        print >> bh, 5, nfl,nwl,nin,nou
-        bh.close()
-
-        bd = open( infileroot + '_' + str(iproc) + '.dat', 'w')
-        for node in nodes[iproc]:
-            i,j,k,flg = node
-            print >> bd,i,j,k,flg
-            print >> fxyz,label[iproc],i,j,k
-

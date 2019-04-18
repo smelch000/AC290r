@@ -74,37 +74,10 @@ class D3q19:
 
         return newneigh
         
-    # returns a list of all d3q19 neighbors of the i,j,k point of type fluid
-    def getfluidneighbors(self,pnt,gridspacing=False):
-
-        if not gridspacing: self.gridspacing=self.msh.gridspacing
-        i,j,k = pnt[0],pnt[1],pnt[2]
-        newneigh=[]
-        for n in xrange(1,19):
-
-            ii = i + self.gridspacing * self.icx[n]
-            jj = j + self.gridspacing * self.icy[n]
-            kk = k + self.gridspacing * self.icz[n]
-
-            if ii<1 or ii>self.msh.nx: continue
-            if jj<1 or jj>self.msh.ny: continue
-            if kk<1 or kk>self.msh.nz: continue
-
-            i4 = self.msh.i4back(ii,jj,kk)
-
-            ir = self.msh.binsearch(self.msh.nfluid, self.msh.itppp_f, i4)
-            foundfluid = self.msh.nfluid>0 and (self.msh.itppp_f[ir]==i4)
-
-        return newneigh
-        
     # returns a list of all d3q19 neighbors of the i,j,k point. 
-    # Neighbors can be fluid, wall, inlet or outlet nodes.
-    # important points:
-    # * the function is accelerated via numpy.searchsorted
-    # * it is **incremental** for the newneigh array (appending data)
-    def getneighbors_fast(self,pnt,newneigh=[],gridspacing=False):
+    # Neighbors can be fluid, wall, inlet or outlet nodes
+    def getneighbors_fast(self,pnt):
 
-        if not gridspacing: self.gridspacing=self.msh.gridspacing
         i,j,k = pnt[0],pnt[1],pnt[2]
         newneigh=[]
 
@@ -118,9 +91,7 @@ class D3q19:
 
         for n in range(1,19):
 
-            ii = i + self.gridspacing * self.icx[n]
-            jj = j + self.gridspacing * self.icy[n]
-            kk = k + self.gridspacing * self.icz[n]
+            ii,jj,kk = i+self.gridspacing* self.icx[n], j+self.gridspacing*self.icy[n], kself.gridspacing*+self.icz[n]
 
             if ii<1 or ii>self.msh.nx: continue
             if jj<1 or jj>self.msh.ny: continue
@@ -147,28 +118,6 @@ class D3q19:
                             newneigh.append(i4)
 
         return newneigh
-
-    def getneighbors_monstre(self,pnt,newneigh=[],gridspacing=False):
-
-        from scipy import ndimage
-
-        DEAD_NODE=0
-        FLUID_NODE=1
-        INLET_NODE=3
-        OUTLET_NODE=4
-
-        nodes = np.full([nx/GRIDSPACING+1,ny/GRIDSPACING+1,nz/GRIDSPACING+1],DEAD_NODE, np.uint)
-        dead_nodes=(nodes == DEAD_NODE)
-
-        kernel_mat = ndimage.generate_binary_structure(3, 2)
-        assert kernel_mat.sum() == 19
-        fluid_nodes_dilated = ndimage.morphology.binary_dilation(nodes==FLUID_NODE,kernel_mat)
-
-        wall_nodes= fluid_nodes_dilated & dead_nodes
-
-        return wall_nodes
-
-
         
     # find neighbors only orthogonal to a given direction
     def getneighbors_aniso(self,pnt,dir):
@@ -201,33 +150,4 @@ class D3q19:
                             newneigh.append(i4)
 
         return newneigh
-        
-    def get_fluid_insature(self,fluidpts,gridspacing=False):
-
-        if not gridspacing: self.gridspacing=self.msh.gridspacing
-
-        insature = []
-        nfl = len(fluidpts)
-        for i,j,k in fluidpts:
-
-            l_insature = False
-            for n in range(1,19):
-
-                ii = i + self.gridspacing * self.icx[n]
-                jj = j + self.gridspacing * self.icy[n]
-                kk = k + self.gridspacing * self.icz[n]
-
-                i4 = self.msh.i4back(ii,jj,kk)
-
-                ir = numpy.searchsorted(self.msh.itppp_f, i4)
-                foundfluid = ir<nfl and (self.msh.itppp_f[ir]==i4)
-
-                if not foundfluid: 
-                    l_insature = True
-                    break
-
-            if l_insature:
-                insature.append([i,j,k])
-
-        return insature
         

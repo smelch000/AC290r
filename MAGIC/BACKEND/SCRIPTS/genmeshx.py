@@ -41,148 +41,119 @@ def _translateGeom(filtgeom,Tx,Ty,Tz):
     tF.Update()
     return tF
 
-def readfiles(surface, clip=False, aclip=False, inlets=False, outlets=False):
+def buildinside(surface,
+                inlets=False,outlets=False,
+                clip=False,aclip=False,
+                wrapbywall=False,
+                openends=False,
+                SCALE=1.,GRIDSPACING=1,T=False):
 
     readsurf = vtkSTLReader(); readsurf.SetFileName( surface ); readsurf.SetMerging(True); readsurf.Update()
     filtsurf = readsurf
 
-    filtins = []
     if inlets:
+        filtins = []
         for inlet in inlets:
             print 'Inlet from file:',inlet
             filtin = vtkSTLReader(); filtin.SetFileName( inlet ); filtin.Update()
             filtins.append(filtin)
 
-    filtouts = []
     if outlets:
+        filtouts = []
         for outlet in outlets:
             print 'Outlet from file:',outlet
             filtout = vtkSTLReader(); filtout.SetFileName( outlet ); filtout.Update()
             filtouts.append(filtout)
 
-    filtclip = None
     if clip:
         print 'Clip region from file:',clip
         filtclip = vtkSTLReader(); filtclip.SetFileName( clip ); filtclip.Update()
 
-    filtaclip = None
     if aclip:
         print 'Aclip region from file:',aclip
         filtaclip = vtkSTLReader(); filtaclip.SetFileName( aclip ); filtaclip.Update()
 
-    return filtsurf, filtclip, filtaclip, filtins, filtouts
-
-def positiveoctant(filtsurf, filtclip, filtaclip, filtins, filtouts, T):
-
-    print('positiveoctant...T:',T)
-
     bnd = filtsurf.GetOutput().GetBounds()
     
-    for filtin in filtins:
-        bndi = filtin.GetOutput().GetBounds()
-        bnd = (min(bnd[0],bndi[0]),max(bnd[1],bndi[1]),min(bnd[2],bndi[2]),max(bnd[3],bndi[3]),min(bnd[4],bndi[4]),max(bnd[5],bndi[5]))
- 
-    for filtout in filtouts:
-        bndo = filtout.GetOutput().GetBounds()
-        bnd = (min(bnd[0],bndo[0]),max(bnd[1],bndo[1]),min(bnd[2],bndo[2]),max(bnd[3],bndo[3]),min(bnd[4],bndo[4]),max(bnd[5],bndo[5]))
+    if inlets:
+        for filtin in filtins:
+            bndi=filtin.GetOutput().GetBounds()
+            bnd=(min(bnd[0],bndi[0]),max(bnd[1],bndi[1]),min(bnd[2],bndi[2]),max(bnd[3],bndi[3]),min(bnd[4],bndi[4]),max(bnd[5],bndi[5]))
+      
+    if outlets:
+        for filtout in filtouts:
+            bndo=filtout.GetOutput().GetBounds()
+            bnd=(min(bnd[0],bndo[0]),max(bnd[1],bndo[1]),min(bnd[2],bndo[2]),max(bnd[3],bndo[3]),min(bnd[4],bndo[4]),max(bnd[5],bndo[5]))
      
     print 'Initial origin: %8.3f %8.3f %8.3f '%(bnd[0],bnd[2],bnd[4]), 'Bounds: %8.3f  %8.3f  %8.3f  %8.3f  %8.3f  %8.3f '%bnd
+ 
 
     # now TRANSLATING
     if not T and (bnd[0]<1 or bnd[2]<1 or bnd[4]<1): # translation to positive octant
         print "Translating to positive octant..."
         filtsurf = _translateGeom(filtsurf, -bnd[0]+10, -bnd[2]+10, -bnd[4]+10)
-        for i,filtin in enumerate(filtins): #enumerate needed because the following create a new object!
+        if inlets:
+          for i,filtin in enumerate(filtins): #enumerate needed because the following create a new object!
             filtins[i] = _translateGeom(filtin, -bnd[0]+10, -bnd[2]+10, -bnd[4]+10)
-        for i,filtout in enumerate(filtouts):
+        if outlets:
+          for i,filtout in enumerate(filtouts):
             filtouts[i] = _translateGeom(filtout, -bnd[0]+10, -bnd[2]+10, -bnd[4]+10)
-        if filtclip: filtclip = _translateGeom(filtclip, -bnd[0]+10, -bnd[2]+10, -bnd[4]+10)
-        if filtaclip: filtaclip = _translateGeom(filtaclip, -bnd[0]+10, -bnd[2]+10, -bnd[4]+10)
-    elif T:
+        if clip: filtclip = _translateGeom(filtclip, -bnd[0]+10, -bnd[2]+10, -bnd[4]+10)
+        if aclip: filtaclip = _translateGeom(filtaclip, -bnd[0]+10, -bnd[2]+10, -bnd[4]+10)
+    else:
         print "Applying user given translation",T
-        print 'T',T
         [Tx,Ty,Tz]=T
         filtsurf = _translateGeom(filtsurf, Tx, Ty, Tz)
-        for i,filtin in enumerate(filtins):
-            filtins[i] = _translateGeom(filtin, Tx, Ty, Tz )
-        for i,filtout in enumerate(filtouts):
-            filtouts[i] = _translateGeom(filtout, Tx, Ty, Tz )
-        if filtclip: filtclip = _translateGeom(filtclip, Tx, Ty, Tz )
-        if filtaclip: filtaclip = _translateGeom(filtaclip, Tx, Ty, Tz )
-
-    for f in [filtsurf, filtclip, filtaclip] + filtins + filtouts:
-        if f!=None: f.Update()
-
+        if inlets:
+            for i,filtin in enumerate(filtins):
+                filtins[i] = _translateGeom(filtin, Tx, Ty, Tz )
+        if outlets:
+            for i,filtout in enumerate(filtouts):
+                filtouts[i] = _translateGeom(filtout, Tx, Ty, Tz )
+        if clip: filtclip = _translateGeom(filtclip, Tx, Ty, Tz )
+        if aclip: filtaclip = _translateGeom(filtaclip, Tx, Ty, Tz )
+    
     bnd = filtsurf.GetOutput().GetBounds()
-    for filtin in filtins:
-        bndi=filtin.GetOutput().GetBounds()
-        bnd=(min(bnd[0],bndi[0]),max(bnd[1],bndi[1]),min(bnd[2],bndi[2]),max(bnd[3],bndi[3]),min(bnd[4],bndi[4]),max(bnd[5],bndi[5]))
+    if inlets:
+        for filtin in filtins:
+            bndi=filtin.GetOutput().GetBounds()
+            bnd=(min(bnd[0],bndi[0]),max(bnd[1],bndi[1]),min(bnd[2],bndi[2]),max(bnd[3],bndi[3]),min(bnd[4],bndi[4]),max(bnd[5],bndi[5]))
       
-    for filtout in filtouts:
-        bndo=filtout.GetOutput().GetBounds()
-        bnd=(min(bnd[0],bndo[0]),max(bnd[1],bndo[1]),min(bnd[2],bndo[2]),max(bnd[3],bndo[3]),min(bnd[4],bndo[4]),max(bnd[5],bndo[5]))
-
+    if outlets:
+        for filtout in filtouts:
+            bndo=filtout.GetOutput().GetBounds()
+            bnd=(min(bnd[0],bndo[0]),max(bnd[1],bndo[1]),min(bnd[2],bndo[2]),max(bnd[3],bndo[3]),min(bnd[4],bndo[4]),max(bnd[5],bndo[5]))
+     
     if bnd[0]<1 : raise Exception(">>> X-bound too low: "+str(bnd[0]))
     if bnd[2]<1 : raise Exception(">>> Y-bound too low: "+str(bnd[2]))
     if bnd[4]<1 : raise Exception(">>> Z-bound too low: "+str(bnd[4]))
     print 'Translated origin: %8.3f %8.3f %8.3f '%(bnd[0],bnd[2],bnd[4]), 'Bounds: %8.3f  %8.3f  %8.3f  %8.3f  %8.3f  %8.3f '%bnd
 
-    for f in [filtsurf, filtclip, filtaclip] + filtins + filtouts:
-        if f!=None: f.Update()
-
-    return filtsurf, filtclip, filtaclip, filtins, filtouts
-
-def scalesolids(filtsurf,  filtclip,filtaclip, filtins, filtouts, SCALE=1.):
-
-    print('scalesolids...scale:',SCALE)
-
     # now SCALING
     filtsurf = _scaleGeom(filtsurf, SCALE)
-
-    for i,filtin in enumerate(filtins):
-       filtins[i] = _scaleGeom(filtin, SCALE)
-
-    for i,filtout in enumerate(filtouts):
-       filtouts[i] = _scaleGeom(filtout, SCALE)
-
-    if filtclip: filtclip = _scaleGeom(filtclip, SCALE)
-    if filtaclip: filtaclip = _scaleGeom(filtaclip, SCALE)
+    if inlets:  
+         for i,filtin in enumerate(filtins):
+            filtins[i] = _scaleGeom(filtin, SCALE)
+    if outlets: 
+         for i,filtout in enumerate(filtouts):
+            filtouts[i] = _scaleGeom(filtout, SCALE)
+    if clip: filtclip = _scaleGeom(filtclip, SCALE)
+    if aclip: filtaclip = _scaleGeom(filtaclip, SCALE)
 
     bnd = filtsurf.GetOutput().GetBounds()
     print 'Rescaled surface origin: %8.3f %8.3f %8.3f '%(bnd[0],bnd[2],bnd[4]), 'Bounds: %8.3f  %8.3f  %8.3f  %8.3f  %8.3f  %8.3f '%bnd
-
-    for f in [filtsurf, filtclip, filtaclip] + filtins + filtouts:
-        if f!=None: f.Update()
-
-    return filtsurf, filtclip, filtaclip, filtins, filtouts
  
-def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=False, openends=False, GRIDSPACING=1):
-
-    print('_buildinside...', 'wrapbywall', wrapbywall, 'openends:',openends, 'gridspacing:', GRIDSPACING)
-
-    bnd = filtsurf.GetOutput().GetBounds()
-    for filtin in filtins:
-        bndi=filtin.GetOutput().GetBounds()
-        bnd=(min(bnd[0],bndi[0]),max(bnd[1],bndi[1]),min(bnd[2],bndi[2]),max(bnd[3],bndi[3]),min(bnd[4],bndi[4]),max(bnd[5],bndi[5]))
-      
-    for filtout in filtouts:
-        bndo=filtout.GetOutput().GetBounds()
-        bnd=(min(bnd[0],bndo[0]),max(bnd[1],bndo[1]),min(bnd[2],bndo[2]),max(bnd[3],bndo[3]),min(bnd[4],bndo[4]),max(bnd[5],bndo[5]))
-
-    print 'Origin: %8.3f %8.3f %8.3f '%(bnd[0],bnd[2],bnd[4]), 'Bounds: %8.3f  %8.3f  %8.3f  %8.3f  %8.3f  %8.3f '%bnd
-
     surface = filtsurf.GetOutput()
-
-    inlets = []
-    for filtin in filtins:
-        inlets.append(filtin.GetOutput())
-    outlets = []
-    for filtout in filtouts:
-        outlets.append(filtout.GetOutput())
-
-    clip, aclip = False, False
-    if filtclip: clip = filtclip.GetOutput()
-    if filtaclip: aclip = filtaclip.GetOutput()
+    if inlets:  
+        inlets = []
+        for filtin in filtins:
+            inlets.append(filtin.GetOutput())
+    if outlets: 
+        outlets = []
+        for filtout in filtouts:
+            outlets.append(filtout.GetOutput())
+    if clip: clip = filtclip.GetOutput()
+    if aclip: aclip = filtaclip.GetOutput()
 
     XR = int(bnd[0])-2, int(bnd[1])+2
     YR = int(bnd[2])-2, int(bnd[3])+2
@@ -230,7 +201,7 @@ def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=Fal
     select_surf.SetSurfaceData(surface);
     select_surf.Update();
 
-    if len(inlets)>0:
+    if inlets:  
         select_inlets = []
         for inlet in inlets:
             select_inlet = vtkSelectEnclosedPoints()
@@ -239,7 +210,7 @@ def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=Fal
             select_inlet.SetSurfaceData(inlet);
             select_inlet.Update();
             select_inlets.append(select_inlet)
-    if len(outlets):
+    if outlets: 
         select_outlets = []
         for outlet in outlets:
             select_outlet = vtkSelectEnclosedPoints()
@@ -278,14 +249,14 @@ def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=Fal
             if aclip and    select_aclip.IsInside(n): continue
 
             found = False
-            if len(inlets)>0 :
+            if inlets :
                 for select_inlet in select_inlets:
                     if select_inlet.IsInside(n):
                         ninlet += 1
                         found = True
                         break
 
-            if len(outlets) and not found:
+            if outlets and not found:
                 for select_outlet in select_outlets:
                     if select_outlet.IsInside(n):
                         noutlet += 1
@@ -294,9 +265,6 @@ def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=Fal
 
             if not found:
                 nfluid += 1
-
-    print '.....',nfluid,0,ninlet,noutlet
-    print 'Point Mins:', xmn,ymn,zmn, 'Maxs:', xmx,ymx,zmx
 
     nx = xmx + 2*GRIDSPACING
     ny = ymx + 2*GRIDSPACING
@@ -314,13 +282,15 @@ def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=Fal
 
     i = 1
     inletId = {}
-    for inlet in inlets:
-        inletId[inlet] = i
-        i += 1
+    if inlets:
+        for inlet in inlets:
+            inletId[inlet] = i
+            i += 1
     outletId = {}
-    for outlet in outlets:
-        outletId[outlet] = i
-        i += 1
+    if outlets:
+        for outlet in outlets:
+            outletId[outlet] = i
+            i += 1
 
     """
     select_surf = vtkSelectEnclosedPoints()
@@ -331,35 +301,29 @@ def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=Fal
     select_surf.SetSurfaceData(surface);
     select_surf.Update();
     """
-
     if wrapbywall:
-
         DEAD_NODE=0
         FLUID_NODE=1
         INLET_NODE=3
         OUTLET_NODE=4
-
         nodes = np.full([nx/GRIDSPACING+1,ny/GRIDSPACING+1,nz/GRIDSPACING+1],DEAD_NODE, np.uint)
-
         innerPoints=np.full([nx/GRIDSPACING+1,ny/GRIDSPACING+1,nz/GRIDSPACING+1], False,np.bool)
-
     for n in xrange( pointsPolydata.GetNumberOfPoints() ):
         if select_surf.IsInside(n):
             p = pointsPolydata.GetPoint(n)
 
             i,j,k = int(p[0]), int(p[1]), int(p[2])
             i4 = msh.i4back(i,j,k)
-            #i4 =  long(long(k)*nxy2 + long(j)*nx2 + long(i))
 
-            if wrapbywall:
-                #innerPoints[i,j,k]=1
-                innerPoints[i/GRIDSPACING,j/GRIDSPACING,k/GRIDSPACING]=True
+            #i4 =  long(long(k)*nxy2 + long(j)*nx2 + long(i))
+            #innerPoints[i,j,k]=1
+            innerPoints[i/GRIDSPACING,j/GRIDSPACING,k/GRIDSPACING]=True
 
             if clip and not select_clip.IsInside(n): continue
             if aclip and    select_aclip.IsInside(n): continue
 
             found = False
-            if len(inlets)>0:
+            if inlets :
                 for inlet,select_inlet in zip(inlets,select_inlets):
                     if select_inlet.IsInside(n):
                         msh.inlet.append([i,j,k])
@@ -367,10 +331,10 @@ def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=Fal
                         msh.itppp_i_id.append( inletId[inlet] )
                         msh.ninlet += 1
                         found = True
-                    if wrapbywall: nodes[i/GRIDSPACING,j/GRIDSPACING,k/GRIDSPACING]=INLET_NODE
-                    break
+                        if wrapbywall: nodes[i/GRIDSPACING,j/GRIDSPACING,k/GRIDSPACING]=INLET_NODE
+                        break
 
-            if len(outlets)>0 and not found :
+            if outlets and not found :
                 found = False
                 for outlet,select_outlet in zip(outlets,select_outlets):
                     if select_outlet.IsInside(n):
@@ -393,10 +357,12 @@ def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=Fal
     msh.itppp_o.sort()
     msh.i_globs, msh.o_globs = [], []
 
-    for inlet in inlets:
-        msh.i_globs.append( {'id':inletId[inlet], 'bctype':'velocity', 'iodir':'0 0 +1 ', 'ioval':0.0} )
-    for outlet in outlets:
-        msh.o_globs.append( {'id':outletId[outlet], 'bctype':'pressure', 'iodir':'0 0 -1', 'ioval':0.0} )
+    if inlets:
+        for inlet in inlets:
+            msh.i_globs.append( {'id':inletId[inlet], 'bctype':'velocity', 'iodir':'0 0 +1 ', 'ioval':0.0} )
+    if outlets:
+        for outlet in outlets:
+            msh.o_globs.append( {'id':outletId[outlet], 'bctype':'pressure', 'iodir':'0 0 -1', 'ioval':0.0} )
 
     print 'Number of Fluid,Wall,Inlet,Outlet: ',msh.nfluid,msh.nwall,msh.ninlet,msh.noutlet
 
@@ -413,7 +379,7 @@ def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=Fal
         if openends:
             wall_nodes= fluid_nodes_dilated & dead_nodes
         else:
-            # determine OUTER and DEAD fluid nodes neighbors
+        # determine OUTER and DEAD fluid nodes neighbors
             wall_nodes= fluid_nodes_dilated & dead_nodes & (~innerPoints)
         #wall_nodes= np.reshape(,[wall_nodes.size])
         q=0
@@ -512,17 +478,14 @@ if __name__ == '__main__':
     if T != False:
       T=args.translate.split()
       T=[float(T[0]),float(T[1]),float(T[2])]
-
-
-    # read all needed surfaces from file 
-    filtsurf, filtclip, filtaclip, filtins, filtouts = readfiles(args.surface, args.clip, args.aclip, inlets, outlets)
-
-    filtsurf, filtclip, filtaclip, filtins, filtouts = positiveoctant(filtsurf, filtclip, filtaclip, filtins, filtouts, T)
-
-    filtsurf, filtclip, filtaclip, filtins, filtouts = scalesolids(filtsurf, filtclip, filtaclip, filtins, filtouts, float(args.SCALE))
-
-    # build mesh nodes in various surfaces
-    mesh = buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, args.wrapbywall, args.openends, int(args.GRIDSPACING))
+    
+    mesh = buildinside(args.surface, 
+                       inlets, outlets, 
+                       args.clip, args.aclip, 
+                       args.wrapbywall, 
+                       args.openends,
+                       float(args.SCALE), int(args.GRIDSPACING),
+                       T)
 
     """
     i_globs, o_globs = [], []

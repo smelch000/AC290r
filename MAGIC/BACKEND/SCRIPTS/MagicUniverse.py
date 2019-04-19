@@ -16,9 +16,13 @@ import threading
 import resource
 import io
 import Mlogging
-from TOOLS.units import Units
-
-_units = Units()
+try:
+    from TOOLS.units import Units
+    _units = Units()
+except:
+    class Units(): pass
+    _units = Units()
+    pass
 _units.Magic = None
 
 try:

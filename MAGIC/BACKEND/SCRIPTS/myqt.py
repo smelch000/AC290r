@@ -54,6 +54,12 @@ try:
                                 QToolBar, \
                                 QFileIconProvider, \
                                 QColorDialog, \
+                                QTableWidget, \
+                                QTableWidgetItem, \
+                                QHeaderView, \
+                                QInputDialog, \
+                                QListWidget, \
+                                QAbstractItemView, \
                                 qApp
     
     from QVTKRenderWindowInteractor import *

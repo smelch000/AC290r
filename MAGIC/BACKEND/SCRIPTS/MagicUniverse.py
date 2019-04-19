@@ -1,7 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import sys,os
 
+import ctypes
 from ctypes import *
 import socket
 import pickle
@@ -12,8 +13,13 @@ import tempfile
 import argparse
 import time
 import threading
-import logging
 import resource
+import io
+import Mlogging
+from TOOLS.units import Units
+
+_units = Units()
+_units.Magic = None
 
 try:
     import muphy2graphics as M2G
@@ -25,9 +31,6 @@ try: # c_bool defined from python 2.5 on
 except:
     c_bool=c_int
 
-def initlog(level=logging.INFO):
-    logging.basicConfig(level=level, format='[%(levelname)s] (%(threadName)-10s) %(message)s',)
-
 """
 module for muphy2
 """
@@ -35,93 +38,125 @@ module for muphy2
 class Empty():
     pass
 
-XPU = 'cpu'
-SOCKET = False
+Magic = None
+
 M = Empty()
-##########################################
-
-def MagicBegins(serialrun=False):
-    """
-    parse and init
-    """
-
-    global XPU,SOCKET
-
-    initlog(level=logging.DEBUG)
-
-    # Completely replace the stdout file descriptor for this process and any 
-    # subprocesses, we can even capture output from child processes.
-    # os.dup2(stdout, 1)
-    # print read_pipe()
-
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('-x', '--xpu',     required=False, default='cpu', help='device [cpu/gpu]')
-    parser.add_argument('-s', '--socket',  required=False, default='no',  help='socket port active [yes/no]')
-    parser.add_argument('-p', '--preproc', required=False, default=None,  help='parallel preprocessing [int]')
-    args = parser.parse_args()
-
-    XPU = args.xpu
-
-    try:
-        MENV = os.path.join(os.environ.get('MUPHY_ROOT'), 'GMUPHY')
-        MU = True
-    except:
-        MENV = os.path.join(os.environ.get('MOEBIUS_ROOT'), 'BACKEND', 'SHOP')
-        MU = False
-
-    if XPU != 'cpu' and XPU != 'gpu':
-        logging.debug( 'xpu:' + XPU + '...not of the right kind!' )
-        sys.exit(1)
-
-    elif XPU == 'cpu':
-        if MU:
-            THELIB = os.path.join( MENV, 'libmuphy2.so')
-        else:
-            THELIB = os.path.join( MENV, 'libmoebius.so')
-
-    elif XPU == 'gpu':
-        if MU:
-            THELIB = os.path.join( MENV, 'libmuphy2.gpu.so')
-        else:
-            THELIB = os.path.join( MENV, 'libmoebius.gpu.so')
-
-    if not os.path.isfile(THELIB):
-        logging.debug( 'Muphy shared library does not exist:' + THELIB )
-        sys.exit(1)
-
-    # instance the muphy object
-    M.MUPHY = CDLL(THELIB, RTLD_GLOBAL)
-
-
-    if args.socket=='yes':
-        SOCKET = True
-    elif args.socket=='no':
-        SOCKET = False
-
-    if args.preproc:
-        preprocess_parallel_mesh( int(args.preproc) )
-        sys.exit(1)
-
-    muphy2wrapper_init(mycomm=0,serialrun=c_int(serialrun))
 
 ##########################################
 
+# def MagicBegins(serialrun=False):
+class MagicBegins():
+
+    def __init__(self, serialrun=False):
+        global Magic
+
+        """
+        Parse command line arguments and specifies the libraries to be loaded.
+        The flags specify:
+            * xpu: cpu vs gpu computing by loading a given self-contained library
+            * debug: runs in debug mode
+            * preproc: runs in preprocessing mode for irregular parallel partitioning
+        gpu computing is only usable in a few slected cases
+        Logging is inited here
+        """
+
+        Magic = self
+
+        self.XPU = 'cpu'
+        self.SOCKET = False
+        self.MUPHYorMOBIUS = '__None__'
+
+        f = open('.MagicPid','w')
+        # print >> f, os.getpid()
+        f.write( str(os.getpid()) )
+        f.close()
+
+        # Completely replace the stdout file descriptor for this process and any 
+        # subprocesses, we can even capture output from child processes.
+        # os.dup2(stdout, 1)
+        # print read_pipe()
+
+        parser = argparse.ArgumentParser()
+
+        parser.add_argument('-x', '--xpu',     required=False, default='cpu', help='device [cpu/gpu]')
+        parser.add_argument('-d', '--debug',  required=False, default='no',  help='debug output [yes/no]')
+        parser.add_argument('-p', '--preproc', required=False, default=None,  help='parallel preprocessing on given number of tasks [int]')
+        # parser.add_argument('-s', '--socket',  required=False, default='no',  help='socket port active [yes/no]')
+        args = parser.parse_args()
+
+        Mlogging.Mlogging(args.debug)
+
+        # done with logging defs
+
+        self.XPU = args.xpu
+
+        try:
+            MENV = os.path.join(os.environ.get('MUPHY_ROOT'), 'EXECUTE')
+            self.MUPHYorMOBIUS = 'Muphy'
+        except:
+            MENV = os.path.join(os.environ.get('MOEBIUS_ROOT'), 'BACKEND', 'SHOP')
+            self.MUPHYorMOBIUS = 'Moebius'
+
+        if self.XPU != 'cpu' and self.XPU != 'gpu':
+            Mlogging.Mlogging.debug( 'xpu:' + self.XPU + '...not of the right kind!' )
+            sys.exit(1)
+
+        elif self.XPU == 'cpu':
+            if self.MUPHYorMOBIUS == 'Muphy':
+                THELIB = os.path.join( MENV, 'libmuphy2.so')
+            elif self.MUPHYorMOBIUS == 'Moebius':
+                THELIB = os.path.join( MENV, 'libmoebius.so')
+
+        elif self.XPU == 'gpu':
+            if self.MUPHYorMOBIUS == 'Muphy':
+                THELIB = os.path.join( MENV, 'libmuphy2.gpu.so')
+            elif self.MUPHYorMOBIUS == 'Moebius':
+                THELIB = os.path.join( MENV, 'libmoebius.gpu.so')
+
+        if not os.path.isfile(THELIB):
+            print('Shared library does not exist:' + THELIB,' ... Halting')
+            Mlogging.Mlogging.debug( 'Shared library does not exist:' + THELIB )
+            sys.exit(1)
+
+        M.MUPHY = CDLL(THELIB, RTLD_GLOBAL)
+
+        #f = io.BytesIO()
+        #with Mlogging.stdout_redirector(f):
+        #    print('foobar')
+        #    print(12)
+        #    M.MUPHY.testprint()
+        #    os.system('echo and this is from echo')
+
+        self.SOCKET = False
+        #if args.socket=='yes':
+        #    self.SOCKET = True
+
+        if args.preproc:
+            preprocess_parallel_mesh( int(args.preproc) )
+            sys.exit(1)
+
+        muphy2wrapper_init(mycomm=0,serialrun=c_int(serialrun))
+
+##########################################
 
 def muphy2wrapper_init(mycomm=0,serialrun=False):
     """
-    initialize wrapper and sockers
+    initialize the library wrapper and sockers for dynamic steering
     -> M.MUPHY.muphy2wrapper_init
     """
 
-    global SOCKET,XPU
+    global Magic
 
-    logging.debug( 'Muphy starts on host: ' + socket.gethostname() + '\n' )
+    Mlogging.Mlogging.debug( 'Run starts on host: ' + socket.gethostname() )
 
-    # M.fill_muphy_object(version='2', xpu=XPU)
+    # M.fill_muphy_object(version='2', xpu=Magic.XPU)
 
-    if SOCKET:
-        M.set_socket_params()
+    try:
+        if Magic.SOCKET:
+            M.set_socket_params()
+    except:
+        Magic.SOCKET=False
+        pass
 
     # M.MUPHY.muphy2wrapper_init(mycomm,len(str),str)
 
@@ -129,13 +164,13 @@ def muphy2wrapper_init(mycomm=0,serialrun=False):
 
     if get_numprocs() >  1: return
 
-    if SOCKET:
+    if Magic.SOCKET:
         try:
             M.req_q = mxqueue.MXQueue()
             sock = MySocket(M.req_q)
         except:
-            print 'socket already in use....not connecting'
-            SOCKET=False
+            print('socket already in use....not connecting')
+            Magic.SOCKET=False
 
 def print_resource_usage(msg): 
 
@@ -146,8 +181,6 @@ def print_resource_usage(msg):
 
     usage = resource.getrusage(resource.RUSAGE_SELF)
 
-    print 
-    print 100*'~'
     # for name, desc in [
     #     ('ru_utime', 'User time'),
     #     ('ru_stime', 'System time'),
@@ -160,15 +193,22 @@ def print_resource_usage(msg):
     #     ]:
     #     print '%-25s (%-10s) = %s' % (desc, name, getattr(usage, name))
 
-    print '%-20s %-20s: %d MB      %-13s: %d MB     %-15s: %d MB' % \
+    allmsg = '%-20s %-20s: %d MB      %-13s: %d MB     %-15s: %d MB' % \
                         (msg, 'Max. Resident Memory', int(getattr(usage, 'ru_maxrss')/1048576.),
                          'Shared Memory', int(getattr(usage, 'ru_ixrss')/1048576.),
                          'Unshared Memory', int(getattr(usage, 'ru_idrss')/1048576.))
-    print 100*'~'
+
+    print(100*'~')
+    print(allmsg)
+    print(100*'~')
+
+    Mlogging.Mlogging.info( allmsg )
 
 def MagicEnds(): 
     """
-    finalize run
+    finalize the simulation by
+        * writing final resource usage
+        * freeing memory and shutting down
     -> M.MUPHY.muphy2wrapper_finish()
     """
 
@@ -178,21 +218,22 @@ def MagicEnds():
 
     del M.MUPHY
 
-    print 'Muphy ends, bye.'
+    print('Magic ends, bye.')
 
 ##########################################
 def get_myproc():
     """
-    get my processor
+    get the id of my task
     """
     myproc = (c_int*1)()
-    # M.MUPHY.get_myproc(byref(myproc))
+
     M.MUPHY.getMyproc(byref(myproc))
+
     return myproc[0]
 ##########################################
 def get_numprocs():
     """
-    get number of processors
+    get number of tasks
     """
     numprocs = (c_int*1)()
     M.MUPHY.getNumprocs(byref(numprocs))
@@ -220,59 +261,66 @@ def sumpara(x):
         n = len(x)
         if type(x[0]) == int:
             x_ = (c_int*n)()
-            for i in xrange(n):
+            for i in range(n):
                 x_[i] = x[i]
             M.MUPHY.sum_dd_ai(c_int(n), byref(x_))
 
         elif type(x[0]) == float:
             x_ = (c_float*n)()
-            for i in xrange(n):
+            for i in range(n):
                 x_[i] = x[i]
             M.MUPHY.sum_dd_a(c_int(n), byref(x_))
 
         return x_
 
     else:
-        print 'Hard Stop in sumpara'
+        print('Hard Stop in sumpara')
         sys.exit(1)
 
 ################################
 class MuArray(object):
     
-    def __init__(self,mesh,allocate=True):
+    def __init__(self, mesh=None, size=None):
 
         self.ptr = (c_void_p*1)()
-        self.mesh = mesh
 
         self.PRC = (c_void_p*1)()
         M.MUPHY.getFloatPrecision(byref(self.PRC))
 
         if self.PRC[0] == 4:
+
             self.c_PRC = c_float
 
         elif self.PRC[0] == 8:
+
             self.c_PRC = c_double
 
-        self.lbound, self.ubound = mesh.getFluidNodesBounds()
-
-        if allocate:
-            M.MUPHY.initMuArray_float(c_int(self.lbound), c_int(self.ubound), self.ptr)
+        if mesh != None:
+            self.mesh = mesh
+            self.lbound, self.ubound = mesh.getFluidNodesBounds()
         else:
-            M.MUPHY.initMuArray_float(c_int(self.lbound), c_int(self.ubound), self.ptr)
-            #M.MUPHY.XinitMuArray_float(c_int(self.lbound), c_int(self.ubound), self.ptr)
-            # M.MUPHY.initMuArray_float(c_int(0), c_int(1), self.ptr)
-            # M.MUPHY.initMuArray_double(c_int(lb), c_int(ub), self.ptr) # TBD !!!
+            self.lbound, self.ubound = 0, size-1
+
+        self.size = self.ubound - self.lbound + 1
+
+        M.MUPHY.initMuArray_float(c_int(self.lbound), c_int(self.ubound), self.ptr)
 
     def pointMuArray(self,parr):
         M.MUPHY.pointMuArray(self.ptr, parr)
 
+    def sum(self):
+
+        sum_ = (c_float*1)()
+        M.MUPHY.sumMuArray_float(self.ptr, sum_)
+        return sum_[0]
+
     def __add__(self,other):
-        new = MuArray(self.mesh)
+        new = MuArray(size = self.size)
         M.MUPHY.addMuArray_float(self.ptr, other.ptr, new.ptr)
         return new
 
     def __mul__(self,f):
-        new = MuArray(self.mesh)
+        new = MuArray(size = self.size)
         M.MUPHY.mulMuArray_float(self.ptr, self.c_PRC(f), new.ptr)
         return new
 
@@ -283,29 +331,46 @@ class MuArray(object):
         if isinstance(key, int) :
             if key < 0: key += len(self)
             if key < 0 or key >= len(self): 
-                raise IndexError, "Index (%d) out of range" % key
+                raise IndexError() # , "Index (%d) out of range" % key
             v = (self.c_PRC*1)()
             M.MUPHY.getElementMuArray_float(self.ptr, c_int(key), byref(v))
             return v[0]
 
         elif isinstance(key, slice) :
+
+            start, stop, step = key.indices(len(self))
+
+            stop += 1
+
+            size = (stop - start - 1) / step + 1
+
             v = (self.c_PRC*1)()
-            vv = []
-            for index in xrange(*key.indices(len(self))):
+            vv = MuArray(size = size)
+
+            # for index in range(*key.indices(len(self))):
+            for index in range(start, stop, step):
+
                 M.MUPHY.getElementMuArray_float(self.ptr, c_int(index), byref(v))
-                vv.append(v[0])
+
+                index2 = (index - start - 1)/step + 1
+
+                M.MUPHY.setElementMuArray_float(vv.ptr, c_int(index2), self.c_PRC(v[0]))
+
             return vv
 
     def __setitem__(self,key,v):
         if isinstance(key, int) :
             if key < 0: key += len(self)
             if key < 0 or key >= len(self): 
-                raise IndexError, "Index (%d) out of range" % key
+                raise IndexError() # , "Index (%d) out of range" % key
             M.MUPHY.setElementMuArray_float(self.ptr, c_int(key), self.c_PRC(v))
 
         elif isinstance(key, slice) :
-            for index in xrange(*key.indices(len(self))):
-                M.MUPHY.setElementMuArray_float(self.ptr, c_int(index), self.c_PRC(v))
+            start,stop,step = key.indices(len(self))
+            M.MUPHY.setSliceMuArray_float(self.ptr, c_int(start), c_int(stop), c_int(step), self.c_PRC(v))
+            #for index in range(*key.indices(len(self))):
+            #    # M.MUPHY.setElementMuArray_float(self.ptr, c_int(index), self.c_PRC(v))
+            #    print 'index:',index,key.indices() # , (*key.indices(len(self)))
 
     def __len__(self):
         sz = (c_int*1)()
@@ -313,19 +378,51 @@ class MuArray(object):
         return sz[0]
 
     def __del__(self):
+        # print '.....deleting MUARRAY'
         M.MUPHY.delMuArray(self.ptr)
+
+    def __str__(self):
+        res_ = 'MuA['
+        for i in range(len(self)):
+            res_ += str(self[i]) + ', '
+        res_ = res_.rstrip(', ')
+        res_ += ']'
+
+        return res_
 
 ################################
 
 class Universe(object):
     """
-    class for universe
+    Class for the whole universe.
+
+    It is controlled by a few parameters such as characteristic values and 
+    finest resolution in order to map physical values to real ones.
+
+    The class contains scales and connects them in any order.
+
+    It will take care of animating (advancing in time) each scale.
+    It has to be instantiated before anything else in simulation.
+
+    For mesh-based simulations, characteristic values are controlled against the
+    Courant-Friedrich-Lewy stability condition.
+    Timestep, elementary mass, pressure, temperature are derived based on scaling relations.
+
+    For atom-based simulations, energy and time scales can be imposed via
+    inter-particel forces which sets the mapping between physical and internal units
+    directly so that characteristic values are unused.
+
+    For hybrid simulations, characteristic values impose the energy and time scales.
+    Consistency between energy and temporal relations in hybrid siulations is user reponsability .
+
     """
 
     DEFAULT = dict(NAME = 'Eden',
                    NUMBEROFSTEPS = 20,
                    TEMPERATURE = 0.,
                    RESTARTFLAG = False,
+                   DUMPSTART = 0,
+                   DUMPSTOP = -1,
                    DUMPFREQUENCY = -1,
                    RESOLUTION = 1.0,
                    PHYSICALMASSDENSITY = 1.0,
@@ -333,25 +430,15 @@ class Universe(object):
                    CHARLENGTH = 1.0,
                    CHARVELOCITY = 1.0,
                    CHARPRESSURE = 1.0,
-                   CHARMACH = 1.0,
+                   CHARMACH = 0.1,
                    HEARTBEAT = 1,
                    PERIOD = 1)
 
-    def setMergeMAP(self,frequency,inputs,output):
-        self.mergeMAP.active = True
-        self.mergeMAP.frequency = frequency
-        self.mergeMAP.inputs = inputs
-        self.mergeMAP.output = output
-
-    def setMergeVTK(self,frequency,influids,outputprefix):
-        self.mergeVTK.active = True
-        self.mergeVTK.frequency = frequency
-        self.mergeVTK.influids = influids
-        self.mergeVTK.outputprefix = outputprefix
-
     def __init__(self,unitsystem='MKS'):
         """
-        self-explain
+        Initialize the universe.
+        It defaults all quantities to internal units
+
         -> M.MUPHY.getReferenceUniverse()
         """
 
@@ -365,8 +452,12 @@ class Universe(object):
 
         self.connectAllMeshesDone = False
         
+        self.setUnits('internal') # can be overridden by user 
+        self.setFinestResolution(1.0)
+        self.setCharacteristicValues(Velocity=1.0, Pressure=1.0, Mach=0.1/0.577)
+
         if unitsystem != 'MKS':
-            print 'Only MKS system allowed'
+            print('Only MKS system allowed')
             sys.exit(1)
 
         self.unitsystem = unitsystem
@@ -415,7 +506,16 @@ class Universe(object):
 
     def addItem(self,item): # add items to the universe
         """
-        self-explanatory
+        Add a single item (actor) to the universe.
+
+        It can only accept a known list of actors:
+            Scale
+            Mesh
+            Fluid
+            Atom
+            ODE
+            Tracker
+            Frame
         """
 
         if isinstance(item,Mesh):
@@ -440,26 +540,137 @@ class Universe(object):
             else:
                 self.trackList.append(item) # in-scale tracker
 
+        elif isinstance(item,Frame):
+            pass
+
         else:
-            print 'addItem: Item not recognized'
+            print('addItem: Item not recognized:', item)
+
+    def setUnits(self, units):
+        """
+        set globally Units. 
+        It currently accepts
+            "internal"
+            "MKS"
+
+        When using MKS units the values for characteristic velocity, pressure and Mach
+        will be used to derive timestep and derived quantities
+        Otherwise they all defaulted to 1 (and 0.1/sqrt(c) for Mach)
+        """
+
+        types = ['MKS', 'internal']
+        if units not in types:
+            print 'Unit types can only be :', types
+            sys.exit(1)
+
+        _units.Magic = units
+
+    def setFinestResolution(self, dx):
+        """
+        Set the fineset resolution in Universe in physica units.
+        The finest resolution, together with setting characteristic quantities,
+        is used to derive all internal units.
+        """
+
+        self.finestResolution = dx
+        if _units.Magic == 'MKS':
+            _units.setMeshSpacing(str(dx) +  ' m')
+        else:
+            return
+        
+    def setCharacteristicValues(self, Velocity, Pressure, Mach):
+        """
+        Set the characteristic values for the universe.
+            Velocity: the expected velocity in a reference region
+            Pressure: the reference pressure in a reference region and equation of state
+            Mach: the simulated Mach number that will be used for back mapping to real Mach
+        """
+
+        if _units.Magic == 'MKS':
+
+            _units.setCharacteristicVelocity(str(Velocity) + ' m/s')
+            _units.setCharacteristicPressure(str(Pressure) + ' Pa')
+
+            _units.setCharacteristicMach(Mach)
+
+            # _units.setSweetSpotVelocity('0.1') # must go last
+
+            _units.setSweetSpotVelocity( Mach * math.sqrt(3.)  ) # must go last
+
+    def setSimulationTime(self, simulationTime):
+        """
+        Sets the simulation time
+        Time is specified in physical units or internal units. For
+            physical units: given the timestep, the nearest integer of time/timestep is taken
+            internal units: value is directly set by the user, assuming unit timestep
+        """
+
+        if _units.Magic == 'internal' and not isinstance(simulationTime, int):
+            print 'For internal units, simulation time must be an integer. Halting...'
+            sys.exit(1)
+
+        _units.simulationTime = simulationTime
+
+        if _units.Magic == 'MKS':
+            nstep = _units.simulationTime / _units.getTimeStep()
+
+            print 'Timestep', _units.getTimeStep(),  ' Total Number of Time Steps:', nstep
+
+            self.setNumberOfSteps( int(nstep.magnitude) )
+
+        else:
+            self.setNumberOfSteps( int(simulationTime) )
+
+    def setSize(self, sx, sy, sz):
+        """
+        unimplemented
+        """
+        pass
+    def setOrigin(self, ox, oy, oz):
+        """
+        unimplemented
+        """
+        pass
+
+    def setMergeMAP(self,frequency,inputs,output):
+        """
+        set parameters to merge different map files for measurements 
+        arising from multi-resolution simulations into a single map file
+        """
+        self.mergeMAP.active = True
+        self.mergeMAP.frequency = frequency
+        self.mergeMAP.inputs = inputs
+        self.mergeMAP.output = output
+
+    def setMergeVTK(self,frequency,influids,outputprefix):
+        """
+        set parameters to merge different vtk/vtu files for measurements 
+        arising from multi-resolution simulations into a single map file
+        """
+        self.mergeVTK.active = True
+        self.mergeVTK.frequency = frequency
+        self.mergeVTK.influids = influids
+        self.mergeVTK.outputprefix = outputprefix
 
     def setPeriod(self,val): 
         """
-        set period of universe clock
+        Set the period of the universe clock
+        Experimental: used only for special case simulations
         -> M.MUPHY.setPeriodUniverse()
         """
         M.MUPHY.setPeriodUniverse(self.ref,c_int(val))
 
     def setHeartBeat(self,val): 
         """
-        set heartbead of universe
+        Set the heartbeat of the universe
+        Experimental: Used only for special case simulations.
         -> M.MUPHY.setHeartBeatUniverse()
         """
         M.MUPHY.setHeartBeatUniverse(self.ref, c_int(val))
 
     def getPeriod(self): 
         """
-        get heartbead of universe
+        gets the heartbeat of the universe
         -> M.MUPHY.getPeriodUniverse()
         """
         val = (c_int*1)()
@@ -468,86 +679,109 @@ class Universe(object):
 
     def setTitle(self,name): 
         """
-        set title of universe
+        Set the title of the universe
         """
         self.setName(name)
     def setName(self,name=DEFAULT['NAME']): 
         """
-        set name of universe
+        Set the name of the universe
         -> M.MUPHY.setName()
         """
         self.name = name
         M.MUPHY.setName(self.ref, c_int(len(name)), name)
     def setNumberOfSteps(self,val=DEFAULT['NUMBEROFSTEPS']): 
         """
-        self-explain
+        Set the number of time step
+        Can be used directly by the user if working in internal units
+        of via the setSimulationTime
         -> M.MUPHY.setNumberOfSteps()
         """
         self.numberofsteps = val
         M.MUPHY.setNumberOfSteps(self.ref, c_int(val))
     def getNumberOfSteps(self):
         """
-        self-explain
+        Get the number of timesteps in the universe time cycle
         -> M.MUPHY.getNumberOfSteps()
         """
         return M.MUPHY.getNumberOfSteps(self.ref)
     def setTemperature(self,val=DEFAULT['TEMPERATURE']): 
         """
-        set universe temeprature. Can be overridden for specific actors
+        Set the universe temeprature. 
+        This value will be used by all contained actors until differently specified.
+        Even if set to zero, thermal simulations can be defined.
+        Temperature can be specified for actors by overrring their objects values.
         -> M.MUPHY.setTemperature()
         """
         M.MUPHY.setTemperature(self.ref, c_float(val))
     def getTemperature(self): 
         """
-        self-explain
+        Get the universe temperature
         -> M.MUPHY.setTemperature()
         """
         return M.MUPHY.getTemperature(self.ref)
     def setStateRestart(self,val=DEFAULT['RESTARTFLAG'],resettimer=False): 
         """
-        flag for restart
+        Set the flag for simulation restart from checkpointing.
+        It requires that Dump files are present in the exact locations.
         -> M.MUPHY.setStateRestart()
         """
         M.MUPHY.setStateRestart(self.ref, c_bool(val), c_bool(resettimer))
     def getStateRestart(self):
         """
-        flag for restart
+        Gets the flag for simulation restart from checkpointing.
         -> M.MUPHY.getStateRestart()
         """
         return M.MUPHY.getStateRestart(self.ref)
+
+    def setStateDump(self, start=DEFAULT['DUMPSTART'], stop=DEFAULT['DUMPSTOP'], freq=DEFAULT['DUMPFREQUENCY'] ): 
+        """
+        Sets the values for saving the state for checkpointing.
+        Values:
+            start: the first step to start checkpointing (time in internal units)
+            stop: the last step to start checkpointing (time in internal units)
+            freq: frequency in steps to dump the state (time in internal units)
+            -> M.MUPHY.setStateDumpStart()
+            -> M.MUPHY.setStateDumpStop()
+            -> M.MUPHY.setStateDumpFrequency()
+        """
+        
+        M.MUPHY.setStateDumpStart(self.ref, c_int(start))
+        M.MUPHY.setStateDumpStop(self.ref, c_int(stop))
+        M.MUPHY.setStateDumpFrequency(self.ref, c_int(freq))
+
     def setStateDumpFrequency(self,val=DEFAULT['DUMPFREQUENCY']): 
         """
-        frequency for restart
+        Set the frequency in steps to dump the state (time in internal units)
         -> M.MUPHY.setStateDumpFrequency()
         """
         M.MUPHY.setStateDumpFrequency(self.ref, c_int(val))
     def getStateDumpFrequency(self):
         """
-        frequency for restart
+        Get the frequency in steps to dump the state (time in internal units)
         -> M.MUPHY.getStateDumpFrequency()
         """
         return M.MUPHY.getStateDumpFrequency(self.ref)
 
     def setLchar(self,val=DEFAULT['CHARLENGTH']):
         """
-        set char length in m
+        Obsolete: Set the characteristic length in MKS
         """
         self.Lchar = val
 
     def setResolution(self,voxm=None,voxcm=None,voxmm=None,voxLchar=None):
         """
-        resolution in voxel per m, cm, mm or per Lchar
+        Obsolete: Set the resolution per voxel in m, cm, mm or per Lchar
         """
 
         num_args = sum(0 if arg is None else 1 for arg in [voxm, voxcm, voxmm, voxLchar])
 
         # if voxm + voxcm + voxmm + voxLchar > 1:
         if num_args > 1:
-            print 'multiple conflicting arguments in setResolution'
+            print('multiple conflicting arguments in setResolution')
             sys.exit(1)
         # elif voxm + voxcm + voxmm + voxLchar == 0:
         elif num_args == 0:
-            print 'no argument in setResolution'
+            print('no argument in setResolution')
             sys.exit(1)
 
         if voxm != None:
@@ -565,74 +799,77 @@ class Universe(object):
         elif voxLchar != None:
 
             if self.Lchar == None:
-                print 'set characteristic length first !'
+                print('set characteristic length first !')
                 sys.exit(1)
 
             self.Resolution = voxLchar / self.Lchar 
 
         else:
-            print 'specify resolution in voxm,voxcm,voxmm or voxLchar !'
+            print('specify resolution in voxm,voxcm,voxmm or voxLchar !')
             sys.exit(1)
 
         self.Dx = 1. / self.Resolution # in MKS
 
     def setPhysicalMassDensity(self,val=DEFAULT['PHYSICALMASSDENSITY']):
         """
-        physical density in Kg/m3
+        Obsolete: sets the physical density in MKS/m3
         """
         self.PhysicalMassDensity = val
 
     def getPhysicalMassDensity(self):
+        """
+        Obsolete: gets the physical density in MKS/m3
+        """
 
         return self.PhysicalMassDensity
 
     def setPhysicalViscosity(self,val=DEFAULT['PHYSICALVISCOSITY']):
         """
-        set viscosity in m2/s
+        Obsolete: sets the physical viscosity in m2/s
         """
         self.PhysicalViscosity = val
 
     def getSpacing(self):
         """
-        get spatial resolution
+        Obsolete: gets the spatial resolution in MKS
         """
         return self.Dx
 
     def getTimeStep(self):
         """
-        get time step
+        Obsolete: gets time step in MKS
         """
         return self.Dt
 
     def getLatticeViscosity(self):
         """
-        get lattice velocity
+        Gets the lattice velocity in internal units
         """
         return self.LatticeViscosity
 
     def setCharacteristicVelocity(self,val=DEFAULT['CHARVELOCITY']):
         """
-        set char velocity in m/s
+        Obsolete: sets the characteristic velocity in MKS
         """
         self.Vchar = val
 
     def setCharacteristicPressure_mmHg(self,val=DEFAULT['CHARPRESSURE'] * 0.007500616827042):
         """
-        set char pressure in mmHg
+        Obsolete: sets the characteristic pressure in mmHg
         """
         self.Pchar_mmHg = val
         self.Pchar = val / 0.007500616827042
 
     def setCharacteristicPressure(self,val=DEFAULT['CHARPRESSURE']):
         """
-        set char pressure in Pa
+        Obsolete: sets the characteristic pressure in Pa
         """
         self.Pchar = val
         self.Pchar_mmHg = val * 0.007500616827042
 
     def getCharacteristicPressure_mmHg(self):
         """
-        get char pressure in mmHg
+        Obsolete: gets the characteristic pressure in Pa
         """
         return self.Pchar_mmHg
 
@@ -644,14 +881,23 @@ class Universe(object):
 
     def setCharacteristicMach(self,val=DEFAULT['CHARMACH']):
         """
-        char Mach
+        Obsolete: sets the characteristic / simulated Mach 
         """
         self.Mach = val
 
     def getCharacteristicMach(self):
+        """
+        Obsolete: gets the characteristic / simulated Mach 
+        """
         return self.Mach
 
     def setRandomRepeatableSequence(self,val):
+        """
+        Sets the flag to specifies if any random sequence should be repeatable
+            repeatable sequence: a fixed random seed is used.
+            non-repeatable sequence: a variable random seed is used.
+        -> M.MUPHY.setRandomRepeatableSequence()
+        """
         M.MUPHY.setRandomRepeatableSequence(c_bool(val))
 
     def setRandomMarsagliaZhang(self,val):
@@ -659,14 +905,21 @@ class Universe(object):
 
     def create(self): # init the whole universe
         """
-        create the universe
-        -> M.MUPHY.banner()
-        -> M.MUPHY.general_output()
+        Creates the universe by using all scales previously specified.
+        The sequence of operations is:
+            * allocate space for the scales and link them according to scale connectivity
+            * work out the units and print values relevant to simulation for inspection
+            * writes the first output for the universe as a whole
+            * traverse the scales and the contained actors and allocate memory for each
+        This method differs from self.decorate() that instead sets
+        the parameters for each actor.
+        -> M.MUPHY.allocateScale()
         -> M.MUPHY.allocateMesh()
         -> M.MUPHY.allocateFluid()
         -> M.MUPHY.allocateAtom()
         -> M.MUPHY.allocateODE()
         -> M.MUPHY.allocateTracker()
+        -> M.MUPHY.general_output()
         -> M.MUPHY.prepareDump()
         """
 
@@ -703,9 +956,40 @@ class Universe(object):
         self.Dt = 1.0
         self.LatticeViscosity = 0.0
 
+        if _units and _units.Magic == 'MKS':
+            print
+            print( '          Characteristic Quantities')
+            print
+            print('Finest Resolution            %s' % _units.getMeshSpacing())
+            print('Finest TimeStep              %s' % _units.getTimeStep())
+            print('Characteristic Velocity      %s' % _units.getCharacteristicVelocity())
+            print('Characteristic Pressure      %s' % _units.getCharacteristicPressure())
+            print('Characteristic Mach          %s' % _units.getCharacteristicMach())
+
         # compute and write out units for fluids
         if len(self.fluidList) > 0:
 
+            if False:
+
+                print
+                print( '                              Fluid Quantities')
+                # print('Viscosity                 %s' % _units.getViscosity())
+                print('Physical Viscosity          %10.4g [m2/s] ' % self.PhysicalViscosity)
+                print('Simulated Mach              %10.4g        ' % self.Mach)
+                # print('Characteristic Mach       %10.4g        ' % self.Mach)
+                # print('Lattice Sound Speed       %10.4g        ' % self.cs)
+                print
+                print( '                                  Derived Quantities')
+                print('Timestep                    %10.4g [s]    ' % self.Dt)
+                if self.numberofsteps != None:
+                    print('Total Simulation Time       %10.4g [s]    ' % (self.Dt * self.numberofsteps))
+                print('Lattice Viscosity           %10.4g [LU]   ' % self.LatticeViscosity)
+                print('Lattice Char. Velocity      %10.4g [LU]  ' % ((self.Dt / self.Dx) * self.Vchar))
+                print
+                print( '============================================================================================ ')
+                print
+
+            """
             self.Dt = self.Dx * self.cs * self.Mach / self.Vchar
             self.LatticeViscosity = self.PhysicalViscosity * self.Dt / self.Dx**2
 
@@ -714,29 +998,29 @@ class Universe(object):
             if myid == 0:
 
                 print
-                print  '============================================================================================ '
+                print( '============================================================================================ ')
                 print
-                print  '                              CFD Characteristic Quantities'
-                print 'Characteristic Length       %10.4g [m]    ' % self.Lchar
-                print 'Voxelization Density        %10g [Vox/Lch]' % (self.Resolution * self.Lchar),
-                print                              '%10g [Vox/m]  ' % self.Resolution,
-                print                              '%10g [Vox/cm] ' % (self.Resolution * 0.01)
-                print 'Spatial Resolution (Dx)     %10.4g [m]    ' % self.Dx
-                print 'Physical Density            %10.4g [Kg/m3]' % self.PhysicalMassDensity
-                print 'Characteristic Velocity     %10.4g [m/s]  ' % self.Vchar
-                print 'Physical Viscosity          %10.4g [m2/s] ' % self.PhysicalViscosity
-                print 'Simulated Mach              %10.4g        ' % self.Mach
-                # print 'Characteristic Mach       %10.4g        ' % self.Mach
-                # print 'Lattice Sound Speed       %10.4g        ' % self.cs
+                print( '                              CFD Characteristic Quantities')
+                print('Characteristic Length       %10.4g [m]    ' % self.Lchar)
+                print('Voxelization Density        %10g [Vox/Lch]' % (self.Resolution * self.Lchar),)
+                print(                             '%10g [Vox/m]  ' % self.Resolution,)
+                print(                             '%10g [Vox/cm] ' % (self.Resolution * 0.01))
+                print('Spatial Resolution (Dx)     %10.4g [m]    ' % self.Dx)
+                print('Physical Density            %10.4g [Kg/m3]' % self.PhysicalMassDensity)
+                print('Characteristic Velocity     %10.4g [m/s]  ' % self.Vchar)
+                print('Physical Viscosity          %10.4g [m2/s] ' % self.PhysicalViscosity)
+                print('Simulated Mach              %10.4g        ' % self.Mach)
+                # print('Characteristic Mach       %10.4g        ' % self.Mach)
+                # print('Lattice Sound Speed       %10.4g        ' % self.cs)
                 print
-                print  '                                  Derived Quantities'
-                print 'Timestep                    %10.4g [s]    ' % self.Dt
+                print( '                                  Derived Quantities')
+                print('Timestep                    %10.4g [s]    ' % self.Dt)
                 if self.numberofsteps != None:
-                    print 'Total Simulation Time       %10.4g [s]    ' % (self.Dt * self.numberofsteps)
-                print 'Lattice Viscosity           %10.4g [LU]   ' % self.LatticeViscosity
-                print 'Lattice Char. Velocity      %10.4g [LU]  ' % ((self.Dt / self.Dx) * self.Vchar)
+                    print('Total Simulation Time       %10.4g [s]    ' % (self.Dt * self.numberofsteps))
+                print('Lattice Viscosity           %10.4g [LU]   ' % self.LatticeViscosity)
+                print('Lattice Char. Velocity      %10.4g [LU]  ' % ((self.Dt / self.Dx) * self.Vchar))
                 print
-                print  '============================================================================================ '
+                print( '============================================================================================ ')
                 print
 
             self.Mchar = self.PhysicalMassDensity * self.Dx**3
@@ -747,6 +1031,7 @@ class Universe(object):
                                         c_float(self.Pchar), \
                                         c_float(self.Mchar),  \
                                         c_float(self.Mach))
+            """
 
         M.MUPHY.general_output()
 
@@ -827,7 +1112,13 @@ class Universe(object):
 
     def decorate(self): 
         """
-        decorate the whole universe
+        decorate the whole universe for each actor. 
+        The sequence of operations is:
+            * traverse all meshes and prepare them, together with mesh connectivity
+            * traverse all other actors and prepare them with initializing internal parameters
+            * finalize mesh preparation
+            * initialize gpus if defined
+        The method prints resource usage up to this point.
         """
         # each call will allocate the prope arrays (scale,mesh,tracks,fluidsall,atomsall,ODEall)
         # for a in self.scaleList: a.prepare()
@@ -843,7 +1134,7 @@ class Universe(object):
             self.CoarsestMesh = a
           
         if maxsp == 0: 
-            print '>>> ERROR: undefined mesh spacing. Check Universe.decorate() call. Aborting...\n'
+            print('>>> ERROR: undefined mesh spacing. Check Universe.decorate() call. Aborting...\n')
             sys.exit(1)
 
         if self.linkedScalesMethod == "MultiMesh" : #PM
@@ -851,7 +1142,7 @@ class Universe(object):
           """
           for i in range(len(self.scalePath)-1):
             if self.scalePath[i].mesh.getSpacing()<self.scalePath[i+1].mesh.getSpacing():
-              print 'In MultiMesh method, scales in linkScales must be given in spacing descending order!\nAborting...'
+              print('In MultiMesh method, scales in linkScales must be given in spacing descending order!\nAborting...')
               sys.exit(1)
           """
           #PM NOTE: the order in which scales are stored within scalePath is now IRRELEVANT
@@ -877,7 +1168,13 @@ class Universe(object):
 
     def animate(self): 
         """
-        animate the whole universe for one step (i.e. the "major" step, the mesh's longest one in MG)
+        Animate the whole universe for a major step.
+        The "major" step corresponds to the mesh's longest one in multiresolutions
+        The method will 
+            * preupdate all actors according to internal prescriptions.
+              This is used typically for multi-specie simulations.
+            * update all actors according to internal prescriptions
+        The method will also merge map and vtk graphical files as separate threads
         """
 
         if self.mergeMAPthread != None:
@@ -917,7 +1214,7 @@ class Universe(object):
             if self.mergeVTK.active and self.itime % self.mergeVTK.frequency == 0:
 
                 self.mergeVTK.inputs = []
-                print self.mergeVTK.influids
+                print(self.mergeVTK.influids)
                 for fl in self.mergeVTK.influids:
 
                     self.mergeVTK.inputs.append( 'DIRDATA_' + fl.name + '/VTK/T' + str(self.itime).zfill(10) + '.pvtu' )
@@ -927,7 +1224,7 @@ class Universe(object):
                 self.mergeVTKthread = threading.Thread(target=M2G.MergeVTKWorker, args=(self.itime, self.mergeVTK))
                 self.mergeVTKthread.start()
         """
-        for heartbeat in xrange(self.getPeriod()):
+        for heartbeat in range(self.getPeriod()):
 
             self.setHeartBeat(heartbeat)
 
@@ -943,13 +1240,13 @@ class Universe(object):
                     scale.update()
                     scale.update()                    
                 else: 
-                    print 'Timechart exception! ...aborting job'
+                    print('Timechart exception! ...aborting job')
                     sys.exit(1)
 
         """
                   
         """
-        for heartbeat in xrange(self.getPeriod()):
+        for heartbeat in range(self.getPeriod()):
             self.setHeartBeat(heartbeat)
 
             for scale in self.scalePath:
@@ -960,7 +1257,7 @@ class Universe(object):
 
     def getMyproc(self):
         """
-        get my processor
+        get my task id
         """
         myproc = (c_int*1)()
         M.MUPHY.getMyproc(byref(myproc))
@@ -968,7 +1265,7 @@ class Universe(object):
 
     def getNumprocs(self):
         """
-        get my processor
+        get the total number of parallel tasks
         """
         numprocs = (c_int*1)()
         M.MUPHY.getNumprocs(byref(numprocs))
@@ -1002,35 +1299,36 @@ class Universe(object):
         # on the COARSEST grid is equal to the steps set by setNumberOfSteps plus one.
         # E.g. if one sets u=Universe; u.setNumberOfSteps(0) then 1 complete step on the
         # COARSEST mesh will be done.
-        for self.itime in xrange(itime_start, itime_start + ncycle+1):
+        for self.itime in range(itime_start, itime_start + ncycle+1):
             self.setItime(self.itime)
             yield self.itime
 
-    # to be called after scale.set(...)
-    # define "scales linkage": set and allocate (in MUPHY) ScalePath;
-    # NOT ScaleList which is set and allocated within Universe.create()
     def linkScales(self,scalePath,method="MultiMesh"):
-        if not hasattr(scalePath[0],'ref'):
-            print '>>> ERROR: linkScales has to be called after Universe.create(). Aborting...\n'
-            sys.exit(1)
-        if hasattr(self,'scalepathref'):
-            print '>>> WARNING! Scales already linked. linkScales call ignored...'
-            return
-        #self.checkMeshConnections = True
         """
+        # to be called after scale.set(...)
+        # define "scales linkage": set and allocate (in MUPHY) ScalePath;
+        # NOT ScaleList which is set and allocated within Universe.create()
+
         link scales
         -> M.MUPHY.allocateScale()
         -> M.MUPHY.allocateScalepath()
         -> M.MUPHY.getReferenceScalepath()
         -> M.MUPHY.linkScalesScalepath()
         """
+        if not hasattr(scalePath[0],'ref'):
+            print('>>> ERROR: linkScales has to be called after Universe.create(). Aborting...\n')
+            sys.exit(1)
+        if hasattr(self,'scalepathref'):
+            print('>>> WARNING! Scales already linked. linkScales call ignored...')
+            return
+        #self.checkMeshConnections = True
 
         ##
         self.scalePath = scalePath
         #PM in MultiMesh context, sort scalePath in mesh spacing descending order
         #PM (useful in Universe.animate and connectAllMeshes)
         if method != "MultiMesh" and method != "":
-            print '>>> ERROR: undefined mesh spacing. Check Universe.decorate() call. Aborting...\n'
+            print('>>> ERROR: undefined mesh spacing. Check Universe.decorate() call. Aborting...\n')
             sys.exit(1)
             
             
@@ -1075,6 +1373,9 @@ class Universe(object):
         M.MUPHY.barrier()
 
     def connectTwoMeshes(self,s1,s2):
+        """
+        Obsolete: connect two meshes
+        """
         # -> M.MUPHY.connectTwoMeshes(s1,s2)
         #s1.enableMG()
         #s2.enableMG()
@@ -1089,6 +1390,9 @@ class Universe(object):
         # to check actual status of each node and communicate various infos
 
     def connectAllMeshes(self): #PM
+        """
+        Connect all meshes in a multi-grid simulation
+        """
 
         if self.connectAllMeshesDone: return
       
@@ -1098,19 +1402,37 @@ class Universe(object):
         spacings=orderedMeshes.keys()
         spacings.sort()
         
+        #DO NOT change connection order! It was carefully arranged!
+        # note that self-connections is done last for each mesh
         for i in range(0,len(spacings)-1):
           self.connectTwoMeshes(orderedMeshes[spacings[i]],orderedMeshes[spacings[i+1]])
           self.connectTwoMeshes(orderedMeshes[spacings[i+1]],orderedMeshes[spacings[i]])
+          #the following does mesh self-connection if enabled in fortran code, otherwise does nothing
           self.connectTwoMeshes(orderedMeshes[spacings[i]],orderedMeshes[spacings[i]])
           
+        #the following does mesh self-connection if enabled in fortran code, otherwise does nothing
         self.connectTwoMeshes(orderedMeshes[spacings[-1]],orderedMeshes[spacings[-1]])
-        #if self.checkMeshConnections==True:
         for i in range(len(self.scalePath)):
           M.MUPHY.checkConnections(self.scalePath[i].ref)
             
         self.connectAllMeshesDone = True
 
 class Scale(object):
+    """
+    Class for the Scale.
+
+    A scale is a container of actors. 
+    It will :
+        * hold references to each of them
+        * contain special actors used to assist the active ones: mesh, frame, tracker
+        * specify scale parameters that wil be inherited by the contained actors
+        * take care of calling the actors' updating funcitons
+
+    A mesh actor is also used for node-free simulations.
+
+    Multi-resolution simulations are based on the concept of associating one mesh per scale
+
+    """
 
     def __init__(self):
         self.actors = []
@@ -1118,7 +1440,8 @@ class Scale(object):
 
     def reference(self,id):
         """
-        make a reference
+        make a reference to the scale itself
+
         -> M.MUPHY.getReferenceScale()
         """
         # self.ref = (py_object*1)() # address of object
@@ -1129,14 +1452,18 @@ class Scale(object):
                                 byref(self.ref))
     def prepare(self): 
         """
-        prepare scale
+        prepare the scale
+
         -> M.MUPHY.prepareScale()
         """
         M.MUPHY.prepareScale(self.ref)
 
-    def set(self,name='GenScale',mesh=None,timechart=[1],actors=[],temperature=0.):
+    def set(self,name='GenScale',mesh=None,frame=None,timechart=[1],actors=[],temperature=0.):
         """
-        set the scale with mesh, timechart, actors and temperature
+        Set the scale with mesh, timechart, actors and temperature
+
+        It will set the scale mesh as a unique one.
+        It loops over all actors and creates a references to it
         """
 
         self.setName(name)
@@ -1148,6 +1475,8 @@ class Scale(object):
 
         for a in actors: # back reference from the actors
             a.scale = self
+
+        # frame still unused
 
 
     def setName(self,name): 
@@ -1168,30 +1497,35 @@ class Scale(object):
 
     def setTimeChart(self,timechart): 
         """
-        set timechart of scale 
+        Obsolete: set the timechart of scale 
+
         -> M.MUPHY.setTimeChartScale()
         """
         self.timechart = timechart
         tc = (c_int*len(timechart))()
-        for i in xrange(len(timechart)): tc[i] = timechart[i]
+        for i in range(len(timechart)): tc[i] = timechart[i]
         M.MUPHY.setTimeChartScale(self.ref, c_int(len(timechart)), byref(tc))
 
     def setTemperature(self,val): 
         """
         set temperature of scale 
+
         -> M.MUPHY.setTemperatureScale()
         """
         M.MUPHY.setTemperatureScale(self.ref, c_float(val))
 
     def getName(self): 
         """
-        get name of scale
+        Get name of scale
         """
         return self.name
 
     def addActors(self,actors): # add actors to scale. scale.mesh should be already referenced
         """
-        add actors to scale
+        Add actors to scale.
+        It will append actors in a list according to their initial definition.
+        It will also inform the tracker about the actors to track.
+
         -> M.MUPHY.addFluidsScale()
         -> M.MUPHY.addAtomsScale()
         -> M.MUPHY.addODEScale()
@@ -1223,7 +1557,7 @@ class Scale(object):
                 trks.append(a)
 
             else:
-                print 'error for actors'
+                print('error for actors')
                 sys.exit(1)
 
         self.tracker = None
@@ -1232,7 +1566,7 @@ class Scale(object):
             self.tracker.addActorsTracker(actors)
 
         elif len(trks) > 1:
-            print 'error: a single scale cannot have more than one tracker'
+            print('error: a single scale cannot have more than one tracker')
             sys.exit(1)
 
         f = get_refs(self.fluids)
@@ -1250,7 +1584,9 @@ class Scale(object):
     # update common to all actors in scale
     def preupdateCommon(self):
         """
-        update common to all actors in scale
+        Pre-Update all actors in scale.
+        This is used particularly for multi-specie simulations.
+        For particle-based and tracker actors this method is mostly a placeholder
         """
 
         if len(self.fluids)>0: 
@@ -1265,7 +1601,9 @@ class Scale(object):
     # update all scale actors
     def update(self,linkedScalesMethod):
         """
-        update scale
+        Update the scale and all its actors.
+        It will correspondigly call the tracker.
+
         """
 
         # no MG: returns always true 
@@ -1308,19 +1646,39 @@ class Scale(object):
         M.MUPHY.printItScale(self.ref)
         
     def isToBeUpdated(self):
-       u = (c_int*1)()
-       M.MUPHY.isToBeUpdatedMesh(self.ref,u)
-       return u[0]==1
+        """
+        specify if the mesh has to be updated at a given step
+        """
+        u = (c_int*1)()
+        M.MUPHY.isToBeUpdatedMesh(self.ref,u)
+        return u[0]==1
        
       
 
 class Mesh(object):
     """
-    class for mesh
+    Class for mesh. 
+
+    A mesh is a collection of grid points in 3D space.
+    Its role is to support the evolution of Eularian actors (fluid, ODE, ...)
+
+    Mesh nodes are tagged as fluid, wall, inlet and outlet nodes.
+
+    A mesh is equipped with a connectivity pattern.
+    THe D3Q19 pattern is currenly supported.
+
+    For single resolution simulations, fluid nodes should be surrounded only
+    by other fluid, wall, inlet and outlet nodes (contacts to dead regions precluded)
+
+    For multi-resolution, rules are relaxed. Compenetration between meshes
+    of different (or same) resolutions will take care of proper interpolations.
+
+    Multi-resolution simulations are based on the concept of associating one mesh per scale
+
     """
 
     DEFAULT = dict(NAME = 'Cubic',
-                   PARALLELEPIPEDBOX = [10,10,10],
+                   PARALLELEPIPEDBOX = [1,1,1],
                    FILEROOT = 'bgkflag',
                    FILES = ['bgkflag.hdr','bgkflag.dat','bgkflag.ios'],
                    MESHFREE = False,
@@ -1340,8 +1698,7 @@ class Mesh(object):
                                           'ZX_Slabs',
                                           'XY_Slabs',
                                           'Cubes',
-                                          'Read_in',
-                                          'Broadcasted'],
+                                          'Optimal Graph'],
                    PARTITIONALONGXYZ = [2,2,2],
                    SYNCHRONOUSSEND = False)
 
@@ -1421,13 +1778,17 @@ class Mesh(object):
 
             f = open(prefix+'.hdr','w')
             print >> f, int(nx),int(ny),int(nz)
+            # f.write( int(nx),int(ny),int(nz) )
             print >> f, 1,int(nx)*int(ny)*int(nz),0,0,0
+            # f.write( 1,int(nx)*int(ny)*int(nz),0,0,0 )
             #f.write('{0:d} {1:d} {2:d}\n'.format(int(nx),int(ny),int(nz)))
             #f.write('{0:d} {1:d} 0 0 0\n'.format(1,int(nx)*int(ny)*int(nz)))
+            print >>f, 1
             f.close()
 
             f = open(prefix+'.dat','w')
-            print >> f,'-1 -1 -1 -1'
+            # print >> f,'-1 -1 -1 -1'
+            f.write( '-1 -1 -1 -1' )
             #f.write('-1 -1 -1 -1\n')
             f.close()
 
@@ -1441,7 +1802,7 @@ class Mesh(object):
         -> M.MUPHY.setFileroot()
         """
         if self.boxsetexplicit:
-            print 'conflicting options....box already set explicitly'
+            print('conflicting options....box already set explicitly')
             return
         M.MUPHY.setFileroot(self.ref, \
                             c_int(len(nameroot)), nameroot)
@@ -1459,7 +1820,7 @@ class Mesh(object):
         -> M.MUPHY.setFilesMesh()
         """
         if self.boxsetexplicit:
-            print 'conflicting options....box already set explicitly'
+            print('conflicting options....box already set explicitly')
             return
         M.MUPHY.setFilesMesh(self.ref, \
                             c_int(len(namehdr)), namehdr, \
@@ -1508,7 +1869,7 @@ class Mesh(object):
         set open/close mesh
         -> M.MUPHY.setSystemExchangeMesh()
         """
-        print '(py) Inactive....call instead setInletOutletMethod'
+        print('(py) Inactive....call instead setInletOutletMethod')
         M.MUPHY.setSystemExchangeMesh(self.ref, c_int(len(name)), name)
     def setGridSpacing(self,val=DEFAULT['GRIDSPACING']):
         """
@@ -1674,10 +2035,13 @@ class Mesh(object):
             return 'OUTLET'
 
         else:
-            print 'getLocatorNodeType: node type not recognized:',itype[0]
+            print('getLocatorNodeType: node type not recognized:',itype[0])
             sys.exit(1)
 
 class Actor(object):
+    """
+        Abstract class for a gneeric actor.
+    """
     scale = None
     mesh = None
     pass
@@ -1685,13 +2049,19 @@ class Actor(object):
 
 class Fluid(Actor):
     """
-    class for fluid
+    Class for fluid actor.
+
+    A fluid is defined on a (cartesian) mesh and evolves in time in an explicit fashion.
+
+        * Several fluid parameters control the material properties.
+        * A bunch of methods control the evolution mechanics.
     """
 
     DEFAULT = dict(NAME = 'Air',
                    DUMPINFORMAT = 'unformatted',
                    DUMPOUTFORMAT = 'unformatted',
                    ADR = False,
+                   MOMENTUMFREEZE = False,
                    FREEZE = False,
                    INERT = False,
                    STABILIZEDLB = True,
@@ -1727,7 +2097,8 @@ class Fluid(Actor):
                    CAPFORCES = False,
                    INLETOUTLETMETHOD = ['closed','equilibrium','zouhe'],
                    INLETOUTLETFILE = 'bgkflag.ios',
-                   DENSITYRANDOMFACTOR = 1.0,
+                   WBCFILE = 'bgkflag.wbc',
+                   DENSITYRANDOMFACTOR = 0.0,
                    SHANCHEN = True,
                    SHANCHENWALL = True,
                    SHANCHENMIX = True,
@@ -1735,14 +2106,18 @@ class Fluid(Actor):
 
     def __init__(self):
         """
-        self-explain
+        Init the actor
         """
         self.outletmethod = None
         self.monitorInletOutletInited = None
 
     def reference(self,id):
         """
-        a few references, such as gradient and laplacian
+        Set a few references, such as 
+            * the actor itself
+            * a gradient to be used for various purposes
+            * a laplacian to be used for various purposes
+
         -> M.MUPHY.getReferenceFluid()
         """
         # self.ref = (py_object*1)() # address of object
@@ -1764,7 +2139,7 @@ class Fluid(Actor):
 
     def setName(self,name=DEFAULT['NAME']): 
         """
-        set name of fluid
+        Set the name of fluid
         -> M.MUPHY.setNameFluid()
         """
         self.name = name
@@ -1772,94 +2147,141 @@ class Fluid(Actor):
 
     def setDumpInFormat(self,fmt=DEFAULT['DUMPINFORMAT']): 
         """
-        set name of fluid
+        Set the file format for reading in checkpointing
         -> M.MUPHY.setDumpInFormatFluid()
         """
         M.MUPHY.setDumpInFormatFluid(self.ref, c_int(len(fmt)), fmt)
 
     def setDumpOutFormat(self,fmt=DEFAULT['DUMPOUTFORMAT']): 
         """
-        set name of fluid
+        Set the file format for writing in checkpointing
         -> M.MUPHY.setDumpOutFormatFluid()
         """
         M.MUPHY.setDumpOutFormatFluid(self.ref, c_int(len(fmt)), fmt)
 
     def setAdvector(self,f): 
         """
-        set freeze flag for fluid
+        Set the fluid to which it is advected.
+        THe fluid internal velocity is enslaved by the advector.
+        Used typically in thermal, mass and electrokinetic simulations.
+
         -> M.MUPHY.setAdvectorFluid()
         """
         M.MUPHY.setAdvectorFluid(self.ref, f.ref)
 
     def setADR(self,val=DEFAULT['ADR']): 
         """
-        set freeze flag for fluid
+        Set the flag for Advection-Diffusion-Reaction simulations
         -> M.MUPHY.setADRFluid()
         """
         M.MUPHY.setADRFluid(self.ref, c_bool(val))
 
+    def setMomentumFreeze(self,val=DEFAULT['MOMENTUMFREEZE']): 
+        """
+        Set the momentum freeze flag for fluid.
+        It will freeze momentum to be used in simulations where
+        only the advected quantity needs to be updated (passive scalar mode)
+
+        -> M.MUPHY.setMomentumFreeze()
+        """
+        M.MUPHY.setMomentumFreezeFluid(self.ref, c_bool(val))
+
     def setFreeze(self,val=DEFAULT['FREEZE']): 
         """
-        set freeze flag for fluid
+        Set freeze flag for fluid
+        For a frozen fluid, there is no time advancement.
+
         -> M.MUPHY.setFreezeFluid()
         """
         M.MUPHY.setFreezeFluid(self.ref, c_bool(val))
 
     def setInert(self,val=DEFAULT['INERT']): 
         """
-        set inert flag for fluid
+        Set inert flag for fluid
+        With such flag the fluid:
+            * does not participate to baricentric properties of mixtures
+            * does not contribute to chemical reactions
+
         -> M.MUPHY.setInertFluid()
         """
         M.MUPHY.setInertFluid(self.ref, c_bool(val))
 
     def setStabilizeLB(self,val=DEFAULT['STABILIZEDLB'],vmax=DEFAULT['STABILIZEDLBVMAX']): 
         """
-        set stabilization for fluid
+        Set the stabilization for fluid.
+
+        Stabilization is controlled by the max velocity to be achieved in simulation.
+        Used specifically for LBM runs.
+
         -> M.MUPHY.setStabilizeLBFluid()
         """
         M.MUPHY.setStabilizeLBFluid(self.ref, c_bool(val), c_float(vmax))
     def setRegularizedLB(self,val=DEFAULT['REGULARIZEDLB']): 
         """
-        set regularization for fluid : no ghosts modes
+        Set regularization for fluid: ghosts modes are removed by filtering
         -> M.MUPHY.setRegularizedLBFluid()
         """
         M.MUPHY.setRegularizedLBFluid(self.ref, c_bool(val))
     def setEntropicLB(self,val=DEFAULT['ENTROPICLB'],itermax=DEFAULT['ENTROPICLBITERATION'],nrtol=DEFAULT['ENTROPICLBTOLERANCE']): 
         """
-        set stabilization for fluid
+        set entropic stabilization for LBM evolution
         -> M.MUPHY.setEntropicLBFluid()
         """
         M.MUPHY.setEntropicLBFluid(self.ref, c_bool(val), c_int(itermax), c_float(nrtol))
     def setCollisionType(self,name=DEFAULT['COLLISIONTYPE'][0]): 
         """
-        set collision type for fluid
+        Obsolete: Set the collision type for fluid
         -> M.MUPHY.setCollisionTypeFluid()
         """
         M.MUPHY.setCollisionTypeFluid(self.ref, c_int(len(name)), name)
     def setLocalViscosity(self,ifl,val): 
         """
-        set lattice viscosity for fluid
+        Set the lattice viscosity for fluid on a given mesh point.
+
         -> M.MUPHY.setViscosityFluid()
         """
         if ifl<0: return
         M.MUPHY.setLocalViscosityFluid(self.ref, c_int(ifl), c_float(val))
+    def setDiffusivity(self,val=DEFAULT['VISCOSITY']): 
+        self.setViscosity(val)
+
     def setViscosity(self,val=DEFAULT['VISCOSITY']): 
         """
         set lattice viscosity for fluid
+
         -> M.MUPHY.setViscosityFluid()
         """
+
+        print 'UNITS',_units.Magic
+        if _units.Magic == 'MKS':
+
+            M.MUPHY.setPhysicalViscosityFluid(self.ref, c_float(val))
+
+            _units.setPhysicalViscosity(str(val) + ' m^2/s')
+            val = _units.getViscosity().magnitude
+
         M.MUPHY.setViscosityFluid(self.ref, c_float(val))
 
     def setDensityUniform(self,val=DEFAULT['DENSITY']): 
         """
-        set initial density for fluid
+        set the initial density for fluid to be uniform over the actor domain
+
         -> M.MUPHY.setDensityFluid()
         """
+
+        if _units.Magic == 'MKS':
+
+            M.MUPHY.setPhysicalMassDensityFluid(self.ref, c_float(val))
+
+            _units.setPhysicalDensity(str(val) + ' kg/m^3')
+            val = _units.getDensity().magnitude
+
         M.MUPHY.setDensityFluid(self.ref, c_float(val))
 
     def getMeanDensity(self,val): 
         """
-        get density for fluid
+        Get the mean density for fluid averaged over the actor domain
+
         -> M.MUPHY.getMeanDensityFluid()
         """
         val = (c_float*1)()
@@ -1868,12 +2290,15 @@ class Fluid(Actor):
         return val[0]
 
     def getDensity(self):
+        """
+        Get the fluid density as a muarray
+        """
 
         parr = (c_void_p*1)()
         M.MUPHY.getDensityFluid(self.ref, byref(parr))
 
         # muarray = MuArray(self.mesh, allocate=False)
-        muarray = MuArray(self.mesh, allocate=True)
+        muarray = MuArray(self.mesh)
 
         M.MUPHY.pointMuArray(muarray.ptr, parr)
 
@@ -1881,24 +2306,51 @@ class Fluid(Actor):
         return muarray
 
     def setDensityTMP(self,parr):
+        """
+        temporary
+        """
 
         #print '\n\n',parr.ptr,'\n\n'
         M.MUPHY.setDensityTMPFluid(self.ref, parr.ptr)
 
+    def getVelocity(self):
+        """
+        Get the fluid density as a muarray
+        """
+
+        pu = (c_void_p*1)()
+        pv = (c_void_p*1)()
+        pw = (c_void_p*1)()
+        M.MUPHY.getVelocityFluid(self.ref, byref(pu), byref(pv), byref(pw))
+
+        mu = MuArray(self.mesh)
+        mv = MuArray(self.mesh)
+        mw = MuArray(self.mesh)
+
+        M.MUPHY.pointMuArray(mu.ptr, pu)
+        M.MUPHY.pointMuArray(mv.ptr, pv)
+        M.MUPHY.pointMuArray(mw.ptr, pw)
+
+        return mu,mv,mw
+
     def setEquilibriumPopulation(self,prho,pu,pv,pw): 
         """
-        set initial density for fluid
+        set teh initial density for fluid via the correponding LBM equilibrium 
         -> M.MUPHY.setEquilibriumPopulationFluid()
         """
         M.MUPHY.setEquilibriumPopulationFluid(self.ref, prho.ptr, pu.ptr, pv.ptr, pw.ptr)
 
     def getArray(self,n): 
+        """
+        Get the muarray
+        """
         array = (c_float*n)() # allocating n elements !
         return array
 
     def setDensityProfile(self,rho): 
         """
-        set initial density for fluid
+        Set initial density for fluid via a given profile
+
         -> M.MUPHY.setDensityProfileFluid()
         """
         n = len(rho)
@@ -1907,7 +2359,8 @@ class Fluid(Actor):
 
     def getDensityProfile(self,rho):  # MAKES A COPY OF THE ARRAY !!!
         """
-        get instantaneous density of fluid
+        Get the instantaneous density of fluid
+
         -> M.MUPHY.getDensityProfileFluid()
         """
         n = len(rho)
@@ -1918,14 +2371,16 @@ class Fluid(Actor):
 
     def readInitialProfile(self,name): 
         """
-        read initial profile from file for fluid
+        Read the initial profile from file for fluid
+
         -> M.MUPHY.readInitialProfileFluid()
         """
         M.MUPHY.readInitialProfileFluid(self.ref, c_int(len(name)), name)
 
     def setShanChenWallCouplingProfile(self,couplingarray): 
         """
-        set initial density for fluid
+        Set the initial density for fluid
+
         -> M.MUPHY.setDensityProfileFluid()
         """
         n = len(couplingarray)
@@ -1934,43 +2389,52 @@ class Fluid(Actor):
 
     def setMass(self,val=DEFAULT['MASS']): 
         """
-        set mass for fluid
+        Set the elementary mass for fluid
+
         -> M.MUPHY.setMassFluid()
         """
         M.MUPHY.setMassFluid(self.ref, c_float(val))
     def setDiffusivity(self,val=DEFAULT['DIFFUSIVITY']): 
         """
-        set mass diffusivity for fluid
+        Set mass diffusivity for fluid
+
         -> M.MUPHY.setDiffusivityFluid()
         """
         M.MUPHY.setDiffusivityFluid(self.ref, c_float(val))
     def setCharge(self,val=DEFAULT['CHARGE']): 
         """
-        set charge for fluid
+        Set the elementary charge for fluid
+
         -> M.MUPHY.setChargeFluid()
         """
         M.MUPHY.setChargeFluid(self.ref, c_float(val))
     def setHSDiameter(self,val=DEFAULT['HSDIAMETER']): 
         """
-        set hard sphere diameter for fluid
+        Set the hard sphere diameter for fluid
+
         -> M.MUPHY.setHSDiameterFluid()
         """
         M.MUPHY.setHSDiameterFluid(self.ref, c_float(val))
     def setFluidOnParticle(self,val=DEFAULT['FLUIDONPARTICLE']): 
         """
-        set if fluid acts on particle
+        Set the flag controlling if the fluid acts on particle
+        Coupling can be turned on and off at run-time.
+
         -> M.MUPHY.setFluidOnParticle()
         """
         M.MUPHY.setFluidOnParticle(self.ref, c_bool(val))
     def setAddNoise(self,val=DEFAULT['ADDNOISE']): 
         """
-        set if fluid has noise
+        Set if the fluid has noise for fluctuating hydrodynamics
+
         -> M.MUPHY.setAddNoiseFluid()
         """
         M.MUPHY.setAddNoiseFluid(self.ref, c_bool(val))
     def setTemperature(self,val=DEFAULT['TEMPERATURE']): 
         """
-        set temperature for fluid
+        set temperature for the fluid in a fluctuating hydrodynamic context.
+        Stablity imposes the values should be small (< 10e-3 in lu and depending on context)
+
         -> M.MUPHY.setTemperatureFluid()
         """
         M.MUPHY.setTemperatureFluid(self.ref, c_float(val))
@@ -1978,7 +2442,8 @@ class Fluid(Actor):
                                  v2=DEFAULT['HOMOGENEOUSFORCE'][1], 
                                  v3=DEFAULT['HOMOGENEOUSFORCE'][2]) :
         """
-        set homogeneous force for fluid
+        set the homogeneous force for fluid
+
         -> M.MUPHY.setHomogeneousForceFluid()
         """
         M.MUPHY.setHomogeneousForceFluid(self.ref, c_float(v1), c_float(v2), c_float(v3))
@@ -1986,7 +2451,8 @@ class Fluid(Actor):
                                          v2=DEFAULT['HOMOGENEOUSELECTRICFORCE'][1],
                                          v3=DEFAULT['HOMOGENEOUSELECTRICFORCE'][2]):
         """
-        set homogeneous electric force for fluid
+        set the homogeneous electric force for fluid
+
         -> M.MUPHY.setHomogeneousElectricForceFluid()
         """
         M.MUPHY.setHomogeneousElectricForceFluid(self.ref, c_float(v1), c_float(v2), c_float(v3))
@@ -1994,19 +2460,22 @@ class Fluid(Actor):
                                 v2=DEFAULT['INITIALVELOCITY'][1],
                                 v3=DEFAULT['INITIALVELOCITY'][2]): 
         """
-        set initial velocity for fluid
+        set the initial velocity for fluid and uniformly
+
         -> M.MUPHY.setInitialVelocityFluid()
         """
         M.MUPHY.setInitialVelocityFluid(self.ref, c_float(v1), c_float(v2), c_float(v3))
     def setShear(self,flag=DEFAULT['SHEAR'],dirs=DEFAULT['SHEARDIRS'],forcing=DEFAULT['SHEARFORCING']): 
         """
         set shear force for fluid
+
         -> M.MUPHY.setShearFluid()
         """
         M.MUPHY.setShearFluid(self.ref, c_bool(flag), c_int(2), dirs, c_float(forcing))
     def setPhysicalViscosity(self,val=DEFAULT['PHYSICALVISCOSITY']): 
         """
         set physical viscosity for fluid
+
         -> M.MUPHY.setPhysicalViscosityFluid()
         """
         M.MUPHY.setPhysicalViscosityFluid(self.ref, c_float(val))
@@ -2026,30 +2495,35 @@ class Fluid(Actor):
     def setStopCOM(self,val=DEFAULT['STOPCOM']): 
         """
         set flag to stop center of mass for fluid
+
         -> M.MUPHY.setStopCOMFluid()
         """
         M.MUPHY.setStopCOMFluid(self.ref, c_bool(val))
     def setAuxiliaryDistribution(self,val=DEFAULT['AUXILIARYDISTRIBUTION']): 
         """
         set flag to use auxiliary distribution method for fluid
+
         -> M.MUPHY.setAuxiliaryDistributionFluid()
         """
         M.MUPHY.setAuxiliaryDistributionFluid(self.ref, c_bool(val))
     def setEDMIntegration(self,val=DEFAULT['EDMINTEGRATION']): 
         """
         set flag to use exact difference method for fluid
+
         -> M.MUPHY.setExactDiffMethIntegrationFluid()
         """
         M.MUPHY.setExactDiffMethIntegrationFluid(self.ref, c_bool(val))
     def setTrapezoidalIntegration(self,val=DEFAULT['TRAPEZOIDALINTEGRATION']): 
         """
         set flag to use trapezoidal method for fluid
+
         -> M.MUPHY.setTrapezoidalIntegrationFluid()
         """
         M.MUPHY.setTrapezoidalIntegrationFluid(self.ref, c_bool(val))
     def setHSDecorrelate(self,val=DEFAULT['HSDECORRELATE']): 
         """
         set flag to decorrelate equilibrium for hard spheres (ENSKOG), equals to ORTHOGONAL equilibrium 
+
         -> M.MUPHY.setHSDecorrelateFluid()
         """
         M.MUPHY.setHSDecorrelateFluid(self.ref, c_bool(val))
@@ -2062,12 +2536,14 @@ class Fluid(Actor):
     def setCapForces(self,val=DEFAULT['CAPFORCES'],roof=1.): 
         """
         set params for capping forces for fluid
+
         -> M.MUPHY.setCapForcesFluid()
         """
         M.MUPHY.setCapForcesFluid(self.ref, c_bool(val), c_float(roof))
     def setInletOutletMethod(self,name=DEFAULT['INLETOUTLETMETHOD'][1]): 
         """
         set inlet/outlet boundary method for fluid
+
         -> M.MUPHY.setInletOutletMethod()
         """
         M.MUPHY.setInletOutletMethodFluid(self.ref, c_int(len(name)), name)
@@ -2075,20 +2551,31 @@ class Fluid(Actor):
     def setInletOutletFile(self,name=DEFAULT['INLETOUTLETFILE']): 
         """
         set inlet/outlet file for fluid
+
         -> M.MUPHY.setInletOutletFileFluid()
         """
         M.MUPHY.setInletOutletFileFluid(self.ref, c_int(len(name)), name)
 
+    def setWBCFile(self,name=DEFAULT['WBCFILE']): 
+        """
+        set inlet/outlet file for fluid
+
+        -> M.MUPHY.setWBCFileFluid()
+        """
+        M.MUPHY.setWBCFileFluid(self.ref, c_int(len(name)), name)
+
     def setInitialDensityRandomFactor(self,rdf=DEFAULT['DENSITYRANDOMFACTOR']): 
         """
         set randomization factor for initial density
+
         -> M.MUPHY.setInitialDensityRandomFactorFluid()
         """
         M.MUPHY.setInitialDensityRandomFactorFluid(self.ref, c_float(rdf))
 
     def setShanChen(self,flag=DEFAULT['SHANCHEN'],coupling=0.0,psi_type=1,a=1.0,b=4.0,t=1.0,omega=1.0): 
         """
-        set flag for shan-chen method
+        set flag for shan-chen method for fluid-fluid coupling
+
         -> M.MUPHY.setShanChenFluid()
         """
         M.MUPHY.setShanChenFluid(self.ref, c_bool(flag), c_float(coupling), \
@@ -2096,21 +2583,24 @@ class Fluid(Actor):
 
     def setShanChenWall(self,flag=DEFAULT['SHANCHENWALL'],wallcoupling=0.0,walldensity=1.0): 
         """
-        set flag for shan-chen method
+        set flag for shan-chen method for fluid-wall coupling
+
         -> M.MUPHY.setShanChenWallFluid()
         """
         M.MUPHY.setShanChenWallFluid(self.ref, c_bool(flag), c_float(wallcoupling), c_float(walldensity))
 
     def setShanChenMix(self,fluidfriend,flag=DEFAULT['SHANCHENMIX'],coupling=0.0,psiAB_type=3): 
         """
-        set flag for shan-chen method
+        set flag for shan-chen method for multispecie simulations
+
         -> M.MUPHY.setShanChenMixFluid()
         """
         M.MUPHY.setShanChenMixFluid(self.ref, fluidfriend.ref, c_bool(flag), c_float(coupling), c_int(psiAB_type))
 
     def resetShanChenMix(self,fluidfriend,flag,coupling=0.0,psiAB_type=3): 
         """
-        set flag for shan-chen method
+        set flag for shan-chen method for multispecie simulations
+
         -> M.MUPHY.resetShanChenMixFluid()
         """
         M.MUPHY.resetShanChenMixFluid(self.ref, fluidfriend.ref, c_bool(flag), c_float(coupling), c_int(psiAB_type))
@@ -2118,6 +2608,7 @@ class Fluid(Actor):
     def getSizeArray(self):
         """
         get size of array for fluid
+
         -> M.MUPHY.getSizeArrayFluid()
         """
         n = (c_int*1)()
@@ -2128,6 +2619,7 @@ class Fluid(Actor):
     def getLocalDensity(self,i,j,k):
         """
         get local density of fluid on point
+
         -> M.MUPHY.getLocalDensityFluid()
         """
         rho_l = (c_float*1)()
@@ -2137,6 +2629,7 @@ class Fluid(Actor):
     def getLocalVelocity(self,i,j,k):
         """
         get local velocity of fluid on point
+
         -> M.MUPHY.getLocalVelocityFluid()
         """
         vx_l = (c_float*1)(); vy_l = (c_float*1)(); vz_l = (c_float*1)()
@@ -2146,6 +2639,7 @@ class Fluid(Actor):
     def getLocalCurrent(self,i,j,k):
         """
         get local current of fluid on point
+
         -> M.MUPHY.getLocalCurrentFluid()
         """
         jx_l = (c_float*1)(); jy_l = (c_float*1)(); jz_l = (c_float*1)()
@@ -2155,6 +2649,7 @@ class Fluid(Actor):
     def getLocalForce(self,i,j,k):
         """
         get local force of fluid on point
+
         -> M.MUPHY.getLocalForceFluid()
         """
         fx_l = (c_float*1)(); fy_l = (c_float*1)(); fz_l = (c_float*1)()
@@ -2164,6 +2659,7 @@ class Fluid(Actor):
     def setLocalDensity(self,i,j,k,val):
         """
         get local density of fluid on point
+
         -> M.MUPHY.setLocalDensityFluid()
         """
         M.MUPHY.setLocalDensityFluid(self.mesh.ref,self.ref,c_int(i),c_int(j),c_int(k),c_float(val))
@@ -2178,6 +2674,7 @@ class Fluid(Actor):
     def getIOBCType(self,ioname,ioid): 
         """
         get inlet/outlet flow value
+
         -> M.MUPHY.getIOBCType()
         """
         bctype = ' '*256
@@ -2187,6 +2684,7 @@ class Fluid(Actor):
     def getIOFlow(self,ioname,ioid): 
         """
         get inlet/outlet flow value
+
         -> M.MUPHY.getIOFlow()
         """
         val = (c_float*1)()
@@ -2196,6 +2694,7 @@ class Fluid(Actor):
     def getIOArea(self,ioname,ioid): 
         """
         get inlet/outlet area
+
         -> M.MUPHY.getIOArea()
         """
         val = (c_float*1)()
@@ -2205,6 +2704,7 @@ class Fluid(Actor):
     def getIOPressure(self,ioname,ioid): 
         """
         get inlet/outlet flow value
+
         -> M.MUPHY.getIOPressure()
         """
         val = (c_float*1)()
@@ -2214,15 +2714,51 @@ class Fluid(Actor):
     def getIOValue(self,ioname,ioid): 
         """
         get inlet/outlet value
+
         -> M.MUPHY.getIOValue()
         """
         val = (c_float*1)()
         M.MUPHY.getIOValue(self.ref, c_int(len(ioname)), ioname, c_int(ioid), byref(val))
         return val[0]
 
+    def setInletOutletBC(self,ioname,ioid,bctype,iodir=None,val=0.,val_dir=None): 
+        """
+        set inlet/outlet value
+
+        -> M.MUPHY.setInletOutletBC()
+        """
+        val_dir_ = (c_float*3)()
+        if val_dir==None:
+            if iodir != None:
+                val_dir_[0] = iodir[0] * 1.
+                val_dir_[1] = iodir[1] * 1.
+                val_dir_[2] = iodir[2] * 1.
+            else:
+                val_dir_[0] = -9999.
+                val_dir_[1] = -9999.
+                val_dir_[2] = -9999.
+
+        iodir_ = (c_int*3)()
+        if iodir==None:
+            iodir_[0] = -9999
+            iodir_[1] = -9999
+            iodir_[2] = -9999
+        else:
+            iodir_[0] = iodir[0]
+            iodir_[1] = iodir[1]
+            iodir_[2] = iodir[2]
+
+        M.MUPHY.setInletOutletBC(self.ref, c_int(len(ioname)),ioname, 
+                        c_int(ioid), 
+                        c_int(len(bctype)),bctype,
+                        byref(iodir_),
+                        c_float(val),
+                        byref(val_dir_))
+
     def setIOValue(self,ioname,ioid,val): 
         """
         set inlet/outlet value
+
         -> M.MUPHY.setIOValue()
         """
         M.MUPHY.setIOValue(self.ref, c_int(len(ioname)),ioname, c_int(ioid), c_float(val))
@@ -2230,6 +2766,7 @@ class Fluid(Actor):
     def setInflowVelocity(self,val): 
         """
         set inlet/outlet inflow value
+
         -> M.MUPHY.setInflowVelocity()
         """
         M.MUPHY.setInflowVelocity(self.ref, c_float(val))
@@ -2237,6 +2774,7 @@ class Fluid(Actor):
     def setWallLeakageFactor(self,val=DEFAULT['WALLLEAKAGEFACTOR']): 
         """
         set wall leakage factor
+
         -> M.MUPHY.setWallLeakageFactor()
         """
         M.MUPHY.setWallLeakageFactor(self.ref, c_float(val))
@@ -2244,6 +2782,7 @@ class Fluid(Actor):
     def setEquilibrium(self,i,j,k,rho,u,v,w):
         """
         set populations of fluid
+
         -> M.MUPHY.setEquilibriumFluid)
         """
         M.MUPHY.setEquilibriumFluid(self.ref, \
@@ -2252,7 +2791,8 @@ class Fluid(Actor):
 
     def getPopulation(self):
         """
-        get populations of fluid
+        get the set of populations of fluid
+
         -> M.MUPHY.getPopulationFluid()
         """
         n = self.getSizeArray()
@@ -2299,7 +2839,7 @@ class Fluid(Actor):
 
     def setPopulation(self,pop):
         """
-        set populations of fluid
+        set the populations of fluid
         -> M.MUPHY.setPopulationFluid)
         """
 
@@ -2370,7 +2910,10 @@ class Fluid(Actor):
     # prepare Fluids, passing context of this scale
     def prepare(self):
         """
-        prepare fluid
+        prepare the fluid for simulation
+        stops if Courant-Friedrich-Lewy condition is violated
+        or if viscosity is too small to run at all
+
         -> M.MUPHY.prepareFluid()
         """
 
@@ -2381,9 +2924,30 @@ class Fluid(Actor):
 
         M.MUPHY.prepareFluid(self.ref, self.scale.ref)
 
+        if _units.Magic == 'MKS' and _units.getViscosity().magnitude < 0.05:
+
+            print '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+            print '!!'
+            print '!! Lattice viscosity is', _units.getViscosity().magnitude, 'and too small for numerical feasibility'
+            print '!!'
+            print '!! Retry by increasing mesh resolution until a value > 0.05 is reached'
+            print '!!'
+            print '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+            sys.exit(0)
+
+        # CHECK
+        # print
+        # print('    Fluid Physical Viscosity      %s' % _units.getPhysicalViscosity())
+        # print('    Fluid Internal Viscosity      %s' % _units.getViscosity())
+        # print
+        # print('    Fluid Physical Density        %s' % _units.getPhysicalDensity())
+        # print('    Fluid Internal Density        %s' % _units.getDensity())
+        # print
+
     def preupdateCommon(self,scale): 
         """
-        propagate all common fluids
+        propagate all common fluids in a multi-specie simulation
+
         -> M.MUPHY.preupdateCommonFluid()
         """
         M.MUPHY.preupdateCommonFluid(scale.ref)
@@ -2413,7 +2977,8 @@ class Fluid(Actor):
 
     def pressuremmHg(self):
         """
-        print info on fluid
+        Obsolete: set pressure
+
         -> M.MUPHY.setPressureMmHg()
         """
         M.MUPHY.setPressureMmHg(self.ref)
@@ -2434,6 +2999,11 @@ class Fluid(Actor):
 
     inlets = {}
     def addInlet(self,id=None,aream2=None,areamm2=None,velocity=None):
+
+        """
+        Obsolete
+        """
+
         i = Empty()
         i.Id = id
 
@@ -2442,7 +3012,7 @@ class Fluid(Actor):
         elif aream2 != None:
             i.PhysicalArea = aream2
         else:
-            print 'addIn/Outlet interface changed....use aream2 or areamm2 instead'
+            print('addIn/Outlet interface changed....use aream2 or areamm2 instead')
             sys.exit(1)
 
         i.PhysicalVelocity = None
@@ -2456,6 +3026,9 @@ class Fluid(Actor):
 
     outlets = {}
     def addOutlet(self,id=None,aream2=None,areamm2=None,velocity=None):
+        """
+        Obsolete
+        """
         o = Empty()
         o.Id = id
 
@@ -2464,7 +3037,7 @@ class Fluid(Actor):
         elif aream2 != None:
             o.PhysicalArea = aream2
         else:
-            print 'addIn/Outlet interface changed....use aream2 or areamm2 instead'
+            print('addIn/Outlet interface changed....use aream2 or areamm2 instead')
             sys.exit(1)
 
         o.PhysicalVelocity = None
@@ -2494,18 +3067,21 @@ class Fluid(Actor):
         self.outletmethod = 'murray'
 
     def IOworkout(self,silent=False):
+        """
+        Obsolete
+        """
 
         # grab the inlet
         if not len(self.inlets)==1:
-            print 'only a single inlet allowed!'
+            print('only a single inlet allowed!')
             sys.exit(1)
         else:
             ikey = self.inlets.keys()[0]
             i = self.inlets[ikey]
             if not silent:
-                print 'Inlet Velocity:'
-                print '     ',ikey, '    vel:', i.PhysicalVelocity, 'm/s                 ', \
-                          (self.universe.Dt / self.universe.Dx ) * i.PhysicalVelocity, 'l.u.'
+                print('Inlet Velocity:')
+                print('     ',ikey, '    vel:', i.PhysicalVelocity, 'm/s                 ', \
+                          (self.universe.Dt / self.universe.Dx ) * i.PhysicalVelocity, 'l.u.')
                 print
 
         if self.outletmethod == None:
@@ -2522,7 +3098,7 @@ class Fluid(Actor):
 
             # ck = 0
             if not silent:
-                print 'Outlet Velocities:'
+                print('Outlet Velocities:')
 
             for okey in self.outlets.keys():
 
@@ -2535,19 +3111,22 @@ class Fluid(Actor):
                 # ck += flow
 
                 if not silent:
-                    print '     ',okey, \
+                    print('     ',okey, \
                         'vel:', self.outlets[okey].PhysicalVelocity, 'm/s    ', \
                         (self.universe.Dt / self.universe.Dx ) * o.PhysicalVelocity,'l.u.',\
-                        '   flow:', i.PhysicalFlow, self.outlets[okey].PhysicalFlow
+                        '   flow:', i.PhysicalFlow, self.outlets[okey].PhysicalFlow)
 
             # if not silent: print '\nCheck for equality:',ck,'=',i.PhysicalFlow,'m3/s','\n'
 
         else:
-            print 'outlet method unknown:',self.outletmethod
+            print('outlet method unknown:',self.outletmethod)
             sys.exit(1)
 
 
     def monitorInletOutlet(self,itime,iofreq,printfreq):
+        """
+        Obsolete
+        """
 
         myid = self.universe.getMyproc()
 
@@ -2573,11 +3152,11 @@ class Fluid(Actor):
             a_in = self.getIOArea('inlet',id)
 
             if myid == 0 and itime%printfreq == 0: 
-                print 'Step:',itime,'id:',id, \
+                print('Step:',itime,'id:',id, \
                       ' Inlet Press:',p_in, \
                       'Flow:',f_in, \
                       'Area:',a_in, \
-                      'Mean Velocity:',f_in/max(1.e-8,a_in)
+                      'Mean Velocity:',f_in/max(1.e-8,a_in))
 
             if myid ==0 and itime%iofreq == 0:
                 self.monitorfp.write(' %g' % p_in); self.monitorff.write(' %g' % f_in)
@@ -2592,11 +3171,11 @@ class Fluid(Actor):
             a_out = self.getIOArea('outlet',id)
 
             if myid==0 and itime%printfreq==0: 
-                print 'Step:',itime,'id:',id, \
+                print('Step:',itime,'id:',id, \
                       ' Outlet Press:',p_out, \
                       'Flow:',f_out, \
                       'Area:',a_out, \
-                      'Mean Velocity:',f_out/max(1.e-8,a_out)
+                      'Mean Velocity:',f_out/max(1.e-8,a_out))
 
             if myid==0 and itime%iofreq == 0:
                 self.monitorfp.write(' %g' % (p_out)); self.monitorff.write(' %g' % (f_out))
@@ -2607,22 +3186,28 @@ class Fluid(Actor):
 
     # check that *.ios header is ok: pressure for inlet, flow for outlets
     def checkhemosetup(self):
+        """
+        Obsolete
+        """
 
         for key in self.inlets.keys():
             id = self.inlets[key].Id
             bctype = self.getIOBCType('inlet',id)
             if bctype[:8] != 'pressure':
-                print 'Inlet BC must be pressure!'
+                print('Inlet BC must be pressure!')
                 sys.exit(1)
 
         for key in self.outlets.keys():
             id = self.outlets[key].Id
             bctype = self.getIOBCType('outlet',id)
             if bctype[:4] != 'flow':
-                print 'Outlet BC must be flow!'
+                print('Outlet BC must be flow!')
                 sys.exit(1)
 
     def snapshot(self,type,qty,fout):
+        """
+        Obsolete
+        """
 
         myid = Universe().getMyproc()
 
@@ -2637,11 +3222,11 @@ class Fluid(Actor):
 
         if type == 'probe':
 
-            print 'Not implemented yet...just lazy'
+            print('Not implemented yet...just lazy')
 
         elif type == 'dat' or type == 'line':
 
-            print 'Not implemented yet...just lazy'
+            print('Not implemented yet...just lazy')
 
         elif type == 'map':
 
@@ -2650,7 +3235,7 @@ class Fluid(Actor):
         
         elif type == 'time':
 
-            print 'Not implemented yet...just lazy'
+            print('Not implemented yet...just lazy')
 
 class Atom(Actor):
     """
@@ -2830,6 +3415,13 @@ class Atom(Actor):
         -> M.MUPHY.setRandomInsertion()
         """
         M.MUPHY.setRandomInsertion(self.ref, c_bool(val))
+
+    def setRigidMolecules(self,val=False):
+        """
+        self-explain
+        -> M.MUPHY.setRigidMolecules()
+        """
+        M.MUPHY.setRigidMolecules(self.ref, c_bool(val))
 
     def setForceAllPairs(self,val=DEFAULT['FORCEALLPAIRS']): 
         """
@@ -3186,7 +3778,7 @@ class Atom(Actor):
         elif cpl=="COUPLE_IMMERSEDBOUNDARY":
           keycpl=5
         else:
-          print '>>> ERROR: undefined coupling method for getDeltaIsoAtom. Aborting...\n'
+          print('>>> ERROR: undefined coupling method for getDeltaIsoAtom. Aborting...\n')
           sys.exit(1)
         
         is_inside=(c_int*1)()
@@ -3337,7 +3929,7 @@ class Atom(Actor):
         elif action == 'gaussian':
             iscale = 2
         else:
-            print 'rescale Molecular Velocity can only be scale/gaussian, got:',action
+            print('rescale Molecular Velocity can only be scale/gaussian, got:',action)
             sys.exit(1)
 
         M.MUPHY.rescaleMolecularVelocityAtom(self.ref, c_int(indmol), c_int(iscale))
@@ -3349,7 +3941,7 @@ class Atom(Actor):
         elif action == 'gaussian':
             iscale = 2
         else:
-            print 'rescale Molecular Velocity can only be scale/gaussian, got:',action
+            print('rescale Molecular Velocity can only be scale/gaussian, got:',action)
             sys.exit(1)
 
         M.MUPHY.rescaleMolecularVelocitiesAtom(self.ref, c_int(iscale))
@@ -3361,7 +3953,7 @@ class Atom(Actor):
         elif action == 'gaussian':
             iscale = 2
         else:
-            print 'rescale Molecular Angular Velocity can only be scale/gaussian, got:',action
+            print('rescale Molecular Angular Velocity can only be scale/gaussian, got:',action)
             sys.exit(1)
 
         M.MUPHY.rescaleMolecularAngularVelocityAtom(self.ref, c_int(indmol), c_int(iscale))
@@ -3373,7 +3965,7 @@ class Atom(Actor):
         elif action == 'gaussian':
             iscale = 2
         else:
-            print 'rescale Molecular Angular Velocity can only be scale/gaussian, got:',action
+            print('rescale Molecular Angular Velocity can only be scale/gaussian, got:',action)
             sys.exit(1)
 
         M.MUPHY.rescaleMolecularAngularVelocitiesAtom(self.ref, c_int(iscale))
@@ -3385,7 +3977,7 @@ class Atom(Actor):
         elif action == 'gaussian':
             iscale = 2
         else:
-            print 'rescale  Velocity can only be scale/gaussian, got:',action
+            print('rescale  Velocity can only be scale/gaussian, got:',action)
             sys.exit(1)
 
         M.MUPHY.rescaleVelocitiesAtom(self.ref, c_int(iscale))
@@ -3586,16 +4178,52 @@ class Frame(Actor):
         """
         self.ref = (c_void_p*1)() # address of object
 
-        M.MUPHY.getReferenceFrame(c_int(id), \
-                                  byref(self.ref))
+        M.MUPHY.getReferenceFrame(c_int(id), byref(self.ref))
 
     def setName(self,name): 
         """
         self-explain
-        -> M.MUPHY.setNameODE()
+        -> M.MUPHY.setNameFrame()
         """
         self.name = name
-        M.MUPHY.setNameFrame(self.ref, c_int(len(name)), name)
+        # M.MUPHY.setNameFrame(self.ref, c_int(len(name)), name)
+        pass
+
+    def setType(self,type_): 
+        """
+        self-explain
+        -> M.MUPHY.setTypeFrame()
+        """
+        # M.MUPHY.setTypeFrame(self.ref, c_int(len(type_)), type_)
+        pass
+
+    def setClockticks(self,ival): 
+        """
+        self-explain
+        -> M.MUPHY.setTypeFrame()
+        """
+        # M.MUPHY.setClockticksFrame(self.ref, c_int(ival))
+        pass
+
+    def setOrigin(self,ox,oy,oz): 
+        """
+        self-explain
+        -> M.MUPHY.setOriginFrame()
+        """
+        # M.MUPHY.setOriginFrame(self.ref, c_float(ox), c_float(oy), c_float(oz))
+        pass
+
+    def setReferenceVector(self,ox,oy,oz): 
+        """
+        self-explain
+        -> M.MUPHY.setReferenceVectorFrame()
+        """
+        # M.MUPHY.setReferenceVectorFrame(self.ref, c_float(ox), c_float(oy), c_float(oz))
+        pass
+
+    def setAngularVelocity(self,ox,oy,oz): 
+        # M.MUPHY.setAngularVelocityFrame(self.ref, c_float(ox), c_float(oy), c_float(oz))
+        pass
 
 class Tracker(Actor):
     """
@@ -3680,7 +4308,7 @@ class Tracker(Actor):
         """
 
         if not isinstance(fluid,Fluid):
-            print 'setMeasurement requires a Fluid object as argument'
+            print('setMeasurement requires a Fluid object as argument')
             sys.exit(1)
 
         if action == 'ontime':
@@ -3690,7 +4318,7 @@ class Tracker(Actor):
         elif action == 'rms':
             action_ = 2
         else:
-            print 'action can only be: ontime/average/rms ! got :',action
+            print('action can only be: ontime/average/rms ! got :',action)
             sys.exit(1)
 
         # convert list to ctypes array
@@ -3896,7 +4524,7 @@ class Interact(Actor):
                 for ia in ids:
                     self.a.setSolvation(ia, self.f.id, solvation)
         except:
-            print 'Incorrect Atom - Fluid coupling !!',ids,drag,solvation
+            print('Incorrect Atom - Fluid coupling !!',ids,drag,solvation)
 
         # ... add similar snippets for Fluid - ODE, Atom - ODE, etc.
 
@@ -3915,7 +4543,7 @@ class CrossTracker(Tracker):
             elif isinstance(a,ODE): O = 1
 
         if F + A + O > 1:
-            print 'error: crosstrack followees are not homogeneous...',f,a,o 
+            print('error: crosstrack followees are not homogeneous...',f,a,o )
             sys.exit(1)
 
         self.superfollowees = []
@@ -3959,7 +4587,7 @@ class CrossTracker(Tracker):
 def list(count, p_items):
     """Returns a python list for the given items represented by a pointer and the number of items"""
     items = []
-    for i in xrange(count):
+    for i in range(count):
         items.append(p_items[i])
     return items
 
@@ -3990,7 +4618,7 @@ def get_refs(items):
     ptr = cast(a, POINTER(c_void_p))
     # print 'CONTENTS:',ptr.contents
 
-    for i in xrange(len(items)):
+    for i in range(len(items)):
         # ptr = ptr_add(ptr, i*(sizeof(c_void_p)))
         ptr.contents.value = items[i].ref[0]
         ptr = ptr_add(ptr, (sizeof(c_void_p)))
@@ -4001,7 +4629,7 @@ def get_refs(items):
 
 #########################################
 
-def preprocess_parallel_mesh(ntasks):
+def preprocess_parallel_mesh(ntasks, infileroot='bgkflag'):
 
     for i in range(ntasks):
 
@@ -4011,7 +4639,8 @@ def preprocess_parallel_mesh(ntasks):
         f = 'bgkflag_'+str(i)+'.hdr'
         if os.path.isfile(f): os.remove(f)
 
-    muphy2wrapper_init(mycomm=0) 
+    # muphy2wrapper_init(mycomm=0) 
+    # MagicBegins(mycomm=0) 
 
     u = Universe()
     s = Scale()
@@ -4041,25 +4670,176 @@ def preprocess_parallel_mesh(ntasks):
     tmpdir = tempfile.mkdtemp(prefix='muphy2TMP') + '/'
 
     # write all side scripts
-    blddeco_sh   = write_blddeco_sh(tmpdir)
-    convgraph_sh = write_convgraph_sh(tmpdir)
-    makeownr_sh  = write_makeownr_sh(tmpdir)
-    goscotch_sh  = write_goscotch_sh(tmpdir)
-    mkflgown_pl  = write_mkflgown_pl(tmpdir)
-
+    # blddeco_sh   = write_blddeco_sh(tmpdir)
+    # convgraph_sh = write_convgraph_sh(tmpdir)
+    # goscotch_sh  = write_goscotch_sh(tmpdir)
     # ...now run all
-    run_command( blddeco_sh )
-    run_command( convgraph_sh )
-    run_command( goscotch_sh + ' %d deco.proscotch deco.%d'%(ntasks,ntasks) )
-    run_command( makeownr_sh + ' deco.%d i4.out nodeownr.%d'%(ntasks,ntasks) )
-    run_command( mkflgown_pl + ' %d bgkflag.hdr bgkflag.dat nodeownr.%d'%(ntasks,ntasks) )
-    run_command( 'mv nodeownr.%d nodeownr.inp'%(ntasks) )
-    run_command( 'rm nl.out com.out i4.out deco deco.%d deco.proscotch'%(ntasks) )
+    # run_command( blddeco_sh )
+    # run_command( convgraph_sh )
+    # fi = open(os.path.join(tmpdir, 'deco'),'r')
+    # fo = open(os.path.join(tmpdir, 'deco.proscotch'),'w')
+
+    ft = open('deco', 'w')
+    fi = open('nl.out', 'r') # file reports only the number of verices and edges in graph
+    print >> ft, fi.readline().strip()
+    fi.close()
+    fi = open('com.out', 'r') # file reports the i4 of each the 18 node neighbors
+    for line in fi.readlines():
+        print >> ft, line.strip()
+    fi.close()
+    ft.close()
+
+    METIS = True
+    SCOTCH = False
+
+    if   METIS:
+        proc = 'gpmetis %s %d'%('deco', ntasks)
+        print ('Running Metis ...: ', proc)
+        subprocess.call(proc, shell=True)
+        print '...done'
+
+        # paste i4.out deco.part | sort -T. -n > nodeownr.inp
+        fi1 = open('i4.out', 'r')
+        fi2 = open('deco.part.%d'%ntasks , 'r')
+        dct = {}
+        while (True):
+            try:
+                i4 = int( fi1.readline().rstrip() )
+                iproc = int( fi2.readline().rstrip() )
+                dct[i4] = iproc
+            except:
+                break
+        fi1.close()
+        fi2.close()
+
+        fo = open('nodeownr.inp' , 'w')
+        for i4 in sorted (dct.keys()):
+            print >> fo, i4, dct[i4]
+        fo.close()
+
+
+    elif SCOTCH:
+        ft = open('deco', 'r')
+        fo = open('deco.proscotch', 'w') # adds a header and no. of edges per node, needed by scotch
+        line = ft.readline().split()
+        nvert = int(line[0])
+        nedges = int(line[1])
+        print >> fo, '0'
+        print >> fo, nvert, nedges
+        print >> fo, '1 000'
+        for line in ft.readlines():
+            l = line.split()
+            print >> fo, len(l), line.rstrip()
+        ft.close()
+        fo.close()
+
+        proc = 'dgpart %d %s %s'%(ntasks,  'deco.proscotch', 'deco.%d'%ntasks )
+        print 'Scotch Running...:', proc
+        subprocess.Popen(proc, shell=True)
+
+        makeownr_sh  = write_makeownr_sh(tmpdir)
+        run_command( makeownr_sh + ' deco.%d i4.out nodeownr.%d'%(ntasks,ntasks) )
+
+
+    h = open(infileroot + '.hdr', 'r')
+    l = h.readline().split()
+    nx,ny,nz = int(l[0]), int(l[1]), int(l[2])
+
+    l = h.readline().split()
+    nmaj,nfl,nwl,nin,nou = int(l[0]), int(l[1]), int(l[2]), int(l[3]), int(l[4])
+    h.close()
+
+    if nmaj != 5:
+        print 'Only operates for majority nodes as deadnodes (5)...halting'
+        sys.exit(1)
+
+    nodes = {}
+    for i in range(ntasks):
+        nodes[i] = []
+
+    nn = nfl + nwl + nin + nou
+    # print 'nfl, nwl, nin, nou:', nfl, nwl, nin, nou, 'ntotal:', nn
+
+    fi = open('nodeownr.inp', 'r')
+    fd = open(infileroot + '.dat', 'r')
+    for n in range(nn) : 
+
+        line = fi.readline().split()
+        i4 = int(line[0])
+        itask = int(line[1])
+
+        k = i4 / ((nx+2)*(ny+2))
+
+        i4 = i4 - (nx+2)*(ny+2)*k
+        j = i4 / (nx+2)
+
+        i = i4 - (nx+2)*j
+
+        line = fd.readline().split()
+        ii,jj,kk,flg = int(line[0]), int(line[1]), int(line[2]), int(line[3])
+
+        if   ii != i: 
+            print 'i mismatch', ii,i; sys.exit(1)
+        elif jj != j: 
+            print 'j mismatch', jj,j; sys.exit(1)
+        elif kk != k: 
+            print 'k mismatch', kk,k; sys.exit(1)
+
+        # print >> n, i4, itask
+        nodes[itask].append([i,j,k,flg])
+    fi.close()
+
+    for itask in range(ntasks):
+
+        nfl,nwl,nin,nou = 0,0,0,0
+        for node in nodes[itask]:
+            i,j,k,flg = node
+            if flg == 1: nfl += 1
+            if flg == 2: nwl += 1
+            if flg == 3: nin += 1
+            if flg == 4: nou += 1
+
+        bh = open( infileroot + '_' + str(itask) + '.hdr', 'w')
+        print >> bh, nx, ny, nz
+        print >> bh, 5, nfl, nwl, nin, nou
+        bh.close()
+
+        bd = open( infileroot + '_' + str(itask) + '.dat', 'w')
+        for node in nodes[itask]:
+            i,j,k,flg = node
+            print >> bd,i,j,k,flg
+        bd.close()
+
+    #mkflgown_pl  = write_mkflgown_pl(tmpdir)
+    #run_command( mkflgown_pl + ' %d bgkflag.hdr bgkflag.dat nodeownr.%d'%(ntasks,ntasks) )
+    #run_command( 'mv nodeownr.%d nodeownr.inp'%(ntasks) )
+
+    run_command( 'rm nl.out com.out i4.out deco' )
+    if METIS:
+        run_command( 'rm deco.part.%d'%(ntasks) )
+    if SCOTCH:
+        run_command( 'rm deco.%d deco.proscotch'%(ntasks) )
+
+    try:
+        import TOOLS.mesh as _mesh
+        # import TOOLS.bgkflag2vtk as cvt
+    except:
+        return
+
+    pds = []
+    msh = _mesh.Mesh()
+    for itask in range(ntasks):
+
+        pd = msh.meshfileToPolyData('bgkflag_%d'%itask, fieldval=itask)
+        pds.append( pd )
+
+    msh.writeCombinedVTP('bgkflag_combined.vtp', pds)
+    
 
 def run_command(cmd):
 
-    time.sleep(2)
-    print 'Running:\n',cmd,'\n'
+    time.sleep(1)
+    print(cmd)
     proc = subprocess.call(shlex.split(cmd))
     time.sleep(2)
 
@@ -4078,11 +4858,13 @@ cat nl.out com.out > deco
 """
 
     blddeco_sh = os.path.join(tmpdir,'blddeco.sh')
-    print '...writing file:',blddeco_sh
+    print('...writing file:',blddeco_sh)
     tmpfl = open(blddeco_sh,'w')
-    print >> tmpfl, text
+    # print >> tmpfl, text
+    tmpfl.write( text )
     tmpfl.close()
     os.chmod(blddeco_sh,0744)
+    # os.chmod(blddeco_sh,744)
     return blddeco_sh
 
 def write_convgraph_sh(tmpdir):
@@ -4094,9 +4876,11 @@ OUTPUT=$(%s/convgraph.pl < deco > deco.proscotch)
 
     convgraph_sh = os.path.join(tmpdir,'convgraph.sh')
     tmpfl = open(convgraph_sh,'w')
-    print >> tmpfl, text
+    # print >> tmpfl, text
+    tmpfl.write( text )
     tmpfl.close()
     os.chmod(convgraph_sh,0744)
+    # os.chmod(convgraph_sh,744)
 
     text=r"""#!/usr/bin/perl
 use strict;
@@ -4117,11 +4901,13 @@ while(<STDIN>) {
 """
 
     convgraph_pl = os.path.join(tmpdir,'convgraph.pl')
-    print '...writing file:',convgraph_pl
+    print('...writing file:',convgraph_pl)
     tmpfl = open(convgraph_pl,'w')
-    print >> tmpfl, text
+    # print >> tmpfl, text
+    tmpfl.write( text )
     tmpfl.close()
     os.chmod(convgraph_pl,0744)
+    # os.chmod(convgraph_pl,744)
 
     return convgraph_sh
 
@@ -4216,11 +5002,13 @@ for($p=0; $p<$ARGV[0]; $p++) {
 }
 """
     mkflgown_pl = os.path.join(tmpdir,'mkflgown.pl')
-    print '...writing file:',mkflgown_pl
+    print('...writing file:',mkflgown_pl)
     tmpfl = open(mkflgown_pl,'w')
-    print >> tmpfl, text
+    # print >> tmpfl, text
+    tmpfl.write( text )
     tmpfl.close()
-    os.chmod(mkflgown_pl,0744)
+    # os.chmod(mkflgown_pl,0744)
+    os.chmod(mkflgown_pl,744)
 
     return mkflgown_pl
 
@@ -4239,15 +5027,26 @@ tail -n +2 $part | sort -n -T. | cut -f 2 | paste $i4file - | sort -T. -n > $tf
 """
 
     makeownr_sh = os.path.join(tmpdir,'makeownr.sh')
-    print '...writing file:',makeownr_sh
+    print('...writing file:',makeownr_sh)
     tmpfl = open(makeownr_sh,'w')
-    print >> tmpfl, text
+    # print >> tmpfl, text
+    tmpfl.write( text )
     tmpfl.close()
     os.chmod(makeownr_sh,0744)
+    # os.chmod(makeownr_sh,744)
 
     return makeownr_sh
 
 def write_goscotch_sh(tmpdir):
+
+    if Magic.MUPHYorMOBIUS == 'Muphy':
+        executable = os.path.join(os.environ.get('MUPHY_ROOT'), 'EXECUTE', 'dgpart')
+
+    elif Magic.MUPHYorMOBIUS == 'Moebius':
+        executable = os.path.join(os.environ.get('MOEBIUS_ROOT'), 'BACKEND', 'SHOP', 'dgpart')
+    else:
+        print ('var undefined', Magic.MUPHYorMOBIUS)
+        sys.exit(1)
 
     text=r"""#!/bin/bash
 
@@ -4262,14 +5061,117 @@ output=$3
 
 # mpirun -np 4 -hostfile ./hostlist ./dgpart $n $input $output
 # ./dgpart $n $input $output
-$MUPHY_BIN/dgpart $n $input $output
-"""
+%s $n $input $output
+""" % executable
+
+# $MUPHY_BIN/dgpart $n $input $output
 
     goscotch_sh = os.path.join(tmpdir,'goscotch.sh')
-    print '...writing file:',goscotch_sh
+    print('...writing file:',goscotch_sh)
     tmpfl = open(goscotch_sh,'w')
-    print >> tmpfl, text
+    # print >> tmpfl, text
+    tmpfl.write( text )
     tmpfl.close()
     os.chmod(goscotch_sh,0744)
+    # os.chmod(goscotch_sh,744)
 
     return goscotch_sh
+
+
+def splitParallelDomainsEqualSlabs(nproc=1, splitdir='x', infileroot='bgkflag'):
+    """
+    Method to split a mesh file into x, y or z regions with almost-equal split zones.
+    It does not guarantee the same number of voxels in each slab.
+    Input:  *.hdr/.dat mesh file
+    Output: *_PE.hdr/*_PE.dat files and
+            nodeownr.inp
+    """
+
+    print 'Splitting:', nproc,'parallel domains', \
+          'along:', splitdir, 'direction', \
+          'for mesh files:', infileroot, '.*'
+
+    h = open(infileroot + '.hdr', 'r')
+    l = h.readline()
+    l = l.split()
+    nx,ny,nz = int(l[0]),int(l[1]),int(l[2])
+    h.close()
+
+    n = open('nodeownr.inp','w')
+
+    nodes = {}
+    for i in range(nproc):
+        nodes[i] = []
+
+    iproc = 0
+    mesh = {}
+    nn = 0
+    imn,jmn,kmn = +1e6,+1e6,+1e6
+    imx,jmx,kmx = -1e6,-1e6,-1e6
+
+    d = open(infileroot + '.dat', 'r')
+    for line in d.readlines():
+        l = line.split()
+        i = int(l[0]); j = int(l[1]); k = int(l[2])
+        imn, imx = min(i,imn), max(i,imx)
+        jmn, jmx = min(j,jmn), max(j,jmx)
+        kmn, kmx = min(k,kmn), max(k,kmx)
+    d.close()
+    print 'imn,imx:',imn,imx
+    print 'jmn,jmx:',jmn,jmx
+    print 'kmn,kmx:',kmn,kmx
+
+    d = open(infileroot + '.dat', 'r')
+
+    for line in d.readlines():
+
+        l = line.split()
+        i = int(l[0]); j = int(l[1]); k = int(l[2])
+
+        flg = int(l[3])
+
+        if splitdir == 'x':
+            iproc = (i-imn) / (nx/nproc )
+
+        elif splitdir == 'y':
+            iproc = (j-jmn) / (ny/nproc )
+
+        elif splitdir == 'z':
+            iproc = (k-kmn) / (nz/nproc )
+
+        else:
+            print 'Unrecognized split direction :',splitdir
+
+        i4 = (nx+2)*(ny+2)*k + (nx+2)*j + i
+        print >> n, i4, iproc
+        nodes[iproc].append([i,j,k,flg])
+        nn += 1
+
+    n.close()
+    d.close()
+
+    label = ['C','N','O','H','X','Y','K','I']
+    fxyz = open('msh.xyz','w')
+    print >> fxyz, nn
+    print >> fxyz
+    for iproc in range(nproc):
+
+        nfl,nwl,nin,nou = 0,0,0,0
+        for node in nodes[iproc]:
+            i,j,k,flg = node
+            if flg == 1: nfl += 1
+            if flg == 2: nwl += 1
+            if flg == 3: nin += 1
+            if flg == 4: nou += 1
+
+        bh = open( infileroot + '_' + str(iproc) + '.hdr', 'w')
+        print >> bh,nx,ny,nz
+        print >> bh, 5, nfl,nwl,nin,nou
+        bh.close()
+
+        bd = open( infileroot + '_' + str(iproc) + '.dat', 'w')
+        for node in nodes[iproc]:
+            i,j,k,flg = node
+            print >> bd,i,j,k,flg
+            print >> fxyz,label[iproc],i,j,k
+

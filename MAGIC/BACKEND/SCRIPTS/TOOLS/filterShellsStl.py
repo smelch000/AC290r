@@ -7,7 +7,7 @@ from myvtk import *
 def filterShells(filterIn=None, filenameIn=None):
 
     if filterIn != None and filenameIn != None:
-        print 'Usage: filterShells PolyDataFilter or file.stl'
+        print ('Usage: filterShells PolyDataFilter or file.stl')
         return
 
     if filenameIn != None:

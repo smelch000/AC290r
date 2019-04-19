@@ -2,10 +2,14 @@
 
 import sys
 import numpy
+from scipy import ndimage
+import argparse
+
 from TOOLS.mesh import *
 from TOOLS.d3q19 import *
 from TOOLS.inletoutlet import *
-import argparse
+
+SLOWMETHOD__ = False
 
 def wrap_by_wall(msh):
 
@@ -30,38 +34,104 @@ def wrap_by_wall(msh):
     # create the neighbors layer around all nodes
     newcomers = []
 
-    for i4 in itppp:
+    if SLOWMETHOD__ :
 
-        pnt = msh.ijk(i4)
+        for i4 in itppp:
 
-        # find all neighbors of point (fluid, inlet or outlet)
+            pnt = msh.ijk(i4)
 
-        newneigh = lat.getneighbors_fast(pnt)
+            # find all neighbors of point (fluid, inlet or outlet)
 
-        # if pnt[2]==3: print pnt[:2] # ,':',msh.ijklist(newneigh)
-        for ii4 in newneigh:
+            newneigh = lat.getneighbors_fast(pnt)
 
-            # ii,jj,kk = msh.ijk(ii4)
-            # if pnt[2]==3 and kk==3: print '    Neigh:', ii,jj
+            # if pnt[2]==3: print pnt[:2] # ,':',msh.ijklist(newneigh)
+            for ii4 in newneigh:
 
-            newcomers.append(ii4)
+                # ii,jj,kk = msh.ijk(ii4)
+                # if pnt[2]==3 and kk==3: print '    Neigh:', ii,jj
 
-    print >> sys.stderr, '\nwrap newcomers...',len(newcomers)
+                newcomers.append(ii4)
+        print >> sys.stderr, '\nwrap newcomers...',len(newcomers)
 
-    # remove duplicates
-    newcomers = list(set(newcomers))
+        # remove duplicates
+        newcomers = list(set(newcomers))
 
-    print >> sys.stderr, ' ====> removed duplicates, wall size:',len(newcomers)
+        print >> sys.stderr, ' ====> removed duplicates, wall size:',len(newcomers)
 
-    msh.itppp_w = numpy.zeros(len(newcomers), dtype='i8')
+        msh.itppp_w = numpy.zeros(len(newcomers), dtype='i8')
 
-    msh.nwall = 0
-    for i4 in newcomers:
-        msh.itppp_w[msh.nwall] = i4
-        msh.nwall += 1
+        msh.nwall = 0
+        for i4 in newcomers:
+            msh.itppp_w[msh.nwall] = i4
+            msh.nwall += 1
  
-    msh.itppp_w.sort()
+        msh.itppp_w.sort()
  
+    else:
+
+        print ('...dilation method valid for d3q19 lattice...')
+
+        DEAD_NODE=0
+        FLUID_NODE=1
+        INLET_NODE=3
+        OUTLET_NODE=4
+
+        # numpy used in the [0:N-1] range
+
+        # nodes = np.full([msh.nx/msh.gridspacing+1, msh.ny/msh.gridspacing+1, msh.nz/msh.gridspacing+1], \
+
+        nodes = np.full([msh.nx/msh.gridspacing, msh.ny/msh.gridspacing, msh.nz/msh.gridspacing], \
+                        DEAD_NODE, \
+                        np.uint)
+
+        imn=1e6; imx=-1e6; jmn=1e6; jmx=-1e6
+        for i4 in msh.itppp_f:
+            i,j,k = msh.ijk(i4)
+            i-=1
+            j-=1
+            k-=1
+            imn = min(imn,i); imx = max(imx,i); jmn = min(jmn,j); jmx = max(jmx,j)
+            nodes[i/msh.gridspacing,j/msh.gridspacing,k/msh.gridspacing] = FLUID_NODE
+
+        for i4 in msh.itppp_i:
+            i,j,k = msh.ijk(i4)
+            i-=1
+            j-=1
+            k-=1
+            imn = min(imn,i); imx = max(imx,i); jmn = min(jmn,j); jmx = max(jmx,j)
+            nodes[i/msh.gridspacing,j/msh.gridspacing,k/msh.gridspacing] = FLUID_NODE # done on purpose...
+
+        for i4 in msh.itppp_o:
+            i,j,k = msh.ijk(i4)
+            i-=1
+            j-=1
+            k-=1
+            imn = min(imn,i); imx = max(imx,i); jmn = min(jmn,j); jmx = max(jmx,j)
+            nodes[i/msh.gridspacing,j/msh.gridspacing,k/msh.gridspacing] = FLUID_NODE # done on purpose...
+
+        dead_nodes=(nodes == DEAD_NODE)
+
+        kernel_mat = ndimage.generate_binary_structure(3, 2)
+        assert kernel_mat.sum() == 19
+        fluid_nodes_dilated = ndimage.morphology.binary_dilation(nodes==FLUID_NODE, 
+                                                                 structure=kernel_mat,
+                                                                 border_value=-99)
+
+        wall_nodes = fluid_nodes_dilated & dead_nodes
+
+        q = 0
+        msh.nwall = wall_nodes.sum()
+        msh.itppp_w = np.zeros(msh.nwall,np.int64)
+        imn=1e6; imx=-1e6; jmn=1e6; jmx=-1e6
+        for (i,j,k),w in np.ndenumerate(wall_nodes):
+
+          if w:
+            msh.itppp_w[q] =msh.i4back(i*msh.gridspacing + 1, 
+                                       j*msh.gridspacing + 1, 
+                                       k*msh.gridspacing + 1)
+            q += 1
+        msh.itppp_w.sort()
+
 ###################
 """
 if __name__ == '__main__':

@@ -60,7 +60,7 @@ class Inletoutlet():
         
             # check
             ir = self.msh.binsearch(self.msh.ninlet, self.msh.itppp_i, i4)
-            if not self.msh.itppp_i[ir]==i4 : print 'inlet point not matching mesh',ir,i4
+            if not self.msh.itppp_i[ir]==i4 : print ('inlet point not matching mesh',ir,i4)
         
             self.itppp_i_id[ir] = id
             self.iodict[id-1][i4] = [ir,self.type[id-1],id,self.dir[id-1]]
@@ -74,7 +74,7 @@ class Inletoutlet():
         
             # check
             ir = self.msh.binsearch(self.msh.noutlet, self.msh.itppp_o, i4)
-            if not self.msh.itppp_o[ir]==i4 : print 'outlet point not matching mesh',ir,i4
+            if not self.msh.itppp_o[ir]==i4 : print ('outlet point not matching mesh',ir,i4)
         
             self.itppp_o_id[ir] = id
             self.iodict[id-1][i4] = ir
@@ -135,7 +135,16 @@ class Inletoutlet():
                     print >> d, i, ' inlet pressure   0 0 +1   .0 .0 .0     0.000'
             else:
                 for glb in self.i_globs:
-                    print >> d, glb['id'], 'inlet', glb['bctype'], glb['iodir'], '     ', glb['iodir'], '     ', glb['ioval']
+
+                    v = glb['iodir']
+                    iodir_ = '%d %d %d'%(+v[0], +v[1], +v[2] )
+                    rodir_ = '%d %d %d'%(-v[0], -v[1], -v[2] )
+
+                    print >> d, glb['id'], 'inlet', \
+                                glb['bctype'], \
+                                iodir_, '     ', \
+                                rodir_, '     ', \
+                                glb['ioval']
 
             # for i in xrange(self.msh.itppp_o_id.max(), self.msh.itppp_o_id.max()+1 ):
             # for i in xrange( iMAX, oMAX+1 ):
@@ -144,7 +153,16 @@ class Inletoutlet():
                     print >> d, i, 'outlet pressure   0 0 +1   .0 .0 .0     0.000'
             else:
                 for glb in self.o_globs:
-                    print >> d, glb['id'], 'outlet', glb['bctype'], glb['iodir'], '     ', glb['iodir'], '     ', glb['ioval']
+
+                    v = glb['iodir']
+                    iodir_ = '%d %d %d'%(+v[0], +v[1], +v[2] )
+                    rodir_ = '%d %d %d'%(-v[0], -v[1], -v[2] )
+
+                    print >> d, glb['id'], 'outlet', \
+                                glb['bctype'], \
+                                iodir_, '     ', \
+                                rodir_, '     ', \
+                                glb['ioval']
 
         # write inlet data
         if self.msh.inlet>0: d.write('%d\n' % (self.msh.ninlet))

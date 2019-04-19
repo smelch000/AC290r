@@ -32,7 +32,7 @@ def bgkflag2vtu(msh, MESHFNAME, OUTFNAME, WALLFNAME=None, WDIR='./'):
         spacing = int( meshh.readline() )
     except:
         spacing = 1
-    print 'Spacing:',spacing
+    print ('Spacing:',spacing)
 
     meshdata = list()
     meshdataWIO = list()

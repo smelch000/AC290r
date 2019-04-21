@@ -12,7 +12,8 @@ import os, sys
 
 sys.path.append( os.path.join(os.getenv("MOEBIUS_ROOT"), "BACKEND/SCRIPTS") )
 
-TOLERANCE=0.
+__TOLERANCE=0.
+__IOFF=1
 
 from myvtk import *
 import argparse
@@ -91,13 +92,13 @@ def positiveoctant(filtsurf, filtclip, filtaclip, filtins, filtouts, T):
     # now TRANSLATING
     if not T and (bnd[0]<1 or bnd[2]<1 or bnd[4]<1): # translation to positive octant
         print "Translating to positive octant..."
-        filtsurf = _translateGeom(filtsurf, -bnd[0]+10, -bnd[2]+10, -bnd[4]+10)
+        filtsurf = _translateGeom(filtsurf, -bnd[0]+__IOFF, -bnd[2]+__IOFF, -bnd[4]+__IOFF)
         for i,filtin in enumerate(filtins): #enumerate needed because the following create a new object!
-            filtins[i] = _translateGeom(filtin, -bnd[0]+10, -bnd[2]+10, -bnd[4]+10)
+            filtins[i] = _translateGeom(filtin, -bnd[0]+__IOFF, -bnd[2]+__IOFF, -bnd[4]+__IOFF)
         for i,filtout in enumerate(filtouts):
-            filtouts[i] = _translateGeom(filtout, -bnd[0]+10, -bnd[2]+10, -bnd[4]+10)
-        if filtclip: filtclip = _translateGeom(filtclip, -bnd[0]+10, -bnd[2]+10, -bnd[4]+10)
-        if filtaclip: filtaclip = _translateGeom(filtaclip, -bnd[0]+10, -bnd[2]+10, -bnd[4]+10)
+            filtouts[i] = _translateGeom(filtout, -bnd[0]+__IOFF, -bnd[2]+__IOFF, -bnd[4]+__IOFF)
+        if filtclip: filtclip = _translateGeom(filtclip, -bnd[0]+__IOFF, -bnd[2]+__IOFF, -bnd[4]+__IOFF)
+        if filtaclip: filtaclip = _translateGeom(filtaclip, -bnd[0]+__IOFF, -bnd[2]+__IOFF, -bnd[4]+__IOFF)
     elif T:
         print "Applying user given translation",T
         print 'T',T
@@ -223,7 +224,7 @@ def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=Fal
 
     # Test the insider points
     select_surf = vtkSelectEnclosedPoints()
-    select_surf.SetTolerance(TOLERANCE)
+    select_surf.SetTolerance(__TOLERANCE)
     print '    testing tolerance:', select_surf.GetTolerance()
 
     select_surf.SetInputData(pointsPolydata);
@@ -250,13 +251,13 @@ def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=Fal
             select_outlets.append(select_outlet)
     if clip: 
         select_clip = vtkSelectEnclosedPoints()
-        select_clip.SetTolerance(TOLERANCE)
+        select_clip.SetTolerance(__TOLERANCE)
         select_clip.SetInputData(pointsPolydata);
         select_clip.SetSurfaceData(clip);
         select_clip.Update();
     if aclip: 
         select_aclip = vtkSelectEnclosedPoints()
-        select_aclip.SetTolerance(TOLERANCE)
+        select_aclip.SetTolerance(__TOLERANCE)
         select_aclip.SetInputData(pointsPolydata);
         select_aclip.SetSurfaceData(aclip);
         select_aclip.Update();
@@ -324,7 +325,7 @@ def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=Fal
 
     """
     select_surf = vtkSelectEnclosedPoints()
-    select_surf.SetTolerance(TOLERANCE)
+    select_surf.SetTolerance(__TOLERANCE)
     print '    testing tolerance:', select_surf.GetTolerance()
 
     select_surf.SetInputData(pointsPolydata);

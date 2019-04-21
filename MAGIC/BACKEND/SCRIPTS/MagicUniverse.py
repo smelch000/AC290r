@@ -20,9 +20,9 @@ try:
     from TOOLS.units import Units
     _units = Units()
 except:
-    class Units(): pass
-    _units = Units()
-    pass
+    class Empty(): pass
+    _units = Empty()
+
 _units.Magic = None
 
 try:
@@ -2082,6 +2082,7 @@ class Fluid(Actor):
                    CHARGE = 1.,
                    HSDIAMETER = 0.,
                    FLUIDONPARTICLE = True,
+                   PARTICLEONFLUID = True,
                    ADDNOISE = False,
                    TEMPERATURE = 0.0,
                    HOMOGENEOUSFORCE = (0.,0.,0.),
@@ -2256,7 +2257,6 @@ class Fluid(Actor):
         -> M.MUPHY.setViscosityFluid()
         """
 
-        print 'UNITS',_units.Magic
         if _units.Magic == 'MKS':
 
             M.MUPHY.setPhysicalViscosityFluid(self.ref, c_float(val))
@@ -2339,10 +2339,24 @@ class Fluid(Actor):
 
     def setEquilibriumPopulation(self,prho,pu,pv,pw): 
         """
-        set teh initial density for fluid via the correponding LBM equilibrium 
+        set the initial density for fluid via the correponding LBM equilibrium 
         -> M.MUPHY.setEquilibriumPopulationFluid()
         """
         M.MUPHY.setEquilibriumPopulationFluid(self.ref, prho.ptr, pu.ptr, pv.ptr, pw.ptr)
+
+    def setDensityStripe(self,axis,indx,val): 
+        """
+        set the density for fluid via the correponding LBM equilibrium on a stripe (planar cut)
+        -> M.MUPHY.setDensityStripeX(self.ref, c_float(val))
+        -> M.MUPHY.setDensityStripeY(self.ref, c_float(val))
+        -> M.MUPHY.setDensityStripeZ(self.ref, c_float(val))
+        """
+        if   axis == 'x':
+            M.MUPHY.setDensityStripeX(self.ref, c_int(indx), c_float(val))
+        elif axis == 'y':
+            M.MUPHY.setDensityStripeY(self.ref, c_int(indx), c_float(val))
+        elif axis == 'z':
+            M.MUPHY.setDensityStripeZ(self.ref, c_int(indx), c_float(val))
 
     def getArray(self,n): 
         """
@@ -2427,6 +2441,14 @@ class Fluid(Actor):
         -> M.MUPHY.setFluidOnParticle()
         """
         M.MUPHY.setFluidOnParticle(self.ref, c_bool(val))
+    def setParticleOnFluid(self,val=DEFAULT['PARTICLEONFLUID']): 
+        """
+        Set the flag controlling if the particls acto on fluid
+        Coupling can be turned on and off at run-time.
+
+        -> M.MUPHY.setParticleOnFluid()
+        """
+        M.MUPHY.setParticleOnFluid(self.ref, c_bool(val))
     def setAddNoise(self,val=DEFAULT['ADDNOISE']): 
         """
         Set if the fluid has noise for fluctuating hydrodynamics
@@ -3589,21 +3611,31 @@ class Atom(Actor):
         """
         self-explain
         -> M.MUPHY.setSolvation()
-        -> M.MUPHY.setGammaRAtom()
         """
         M.MUPHY.setSolvationAtom(self.ref, c_int(ia), c_int(isp), c_float(fact))
 
-    def setGamma(self,ia,gammaT=DEFAULT['GAMMAT'],gammaR=DEFAULT['GAMMAR']): 
+    def setGamma(self,ia=None,gammaT=DEFAULT['GAMMAT'],gammaR=DEFAULT['GAMMAR']): 
         """
         self-explain
         -> M.MUPHY.setGammaTAtom()
         -> M.MUPHY.setGammaRAtom()
         """
-        if gammaT != None:
-            M.MUPHY.setGammaTAtom(self.ref, c_int(ia), c_float(gammaT))
+        if ia != None:
+            if type(ia) != int:
+                print 'Error: setGamma invoked with non-integer value'
+                sys.exit(1)
+        
+            if gammaT != None:
+                M.MUPHY.setGammaTAtom(self.ref, c_int(ia), c_float(gammaT))
 
-        if gammaR != None:
-            M.MUPHY.setGammaRAtom(self.ref, c_int(ia), c_float(gammaR))
+            if gammaR != None:
+                M.MUPHY.setGammaRAtom(self.ref, c_int(ia), c_float(gammaR))
+        else:
+            if gammaT != None:
+                M.MUPHY.setAllGammaTAtom(self.ref, c_float(gammaT))
+
+            if gammaR != None:
+                M.MUPHY.setAllGammaRAtom(self.ref, c_float(gammaR))
 
     def setPassiveScalar(self,isp,val=DEFAULT['PASSIVESCALAR']): 
         """
@@ -3819,6 +3851,13 @@ class Atom(Actor):
         n = len(px)
         px_l = (c_float*n)(*px); py_l = (c_float*n)(*py); pz_l = (c_float*n)(*pz)
         M.MUPHY.setVelocityAtom(self.ref,c_int(n), byref(px_l), byref(py_l), byref(pz_l))
+   
+    def setZeroVelocity(self):
+        """
+        self-explain
+        -> M.MUPHY.setVelocityAtom()
+        """
+        M.MUPHY.setZeroVelocityAtom(self.ref)
    
     def setForce(self,px,py,pz):
         """

@@ -132,7 +132,7 @@ class Mesh:
         function to read a .hdr/.dat file
         """
 
-        print 'reading mesh header file:',filehdr
+        print ('reading mesh header file:',filehdr)
 
         h = open(filehdr,'r')
         line = h.readline().split()
@@ -149,7 +149,7 @@ class Mesh:
         h.close()
 
         ##################
-        print 'reading mesh dat file:',filedat
+        print ('reading mesh dat file:',filedat)
 
         self.box_strides()
 
@@ -163,6 +163,7 @@ class Mesh:
             line = line.split()
             i,j,k,flg = int(line[0]),int(line[1]),int(line[2]),int(line[3])
             i4 = long(long(k)*self.nxy2 + long(j)*self.nx2 + long(i))
+
             if flg == 1:
                 self.nfluid += 1
 
@@ -177,7 +178,7 @@ class Mesh:
 
         d.close()
 
-        print '\nnfluid: %d, wall: %d, inlet: %d, noutlet: %d' % (self.nfluid,self.nwall,self.ninlet,self.noutlet)
+        print ('\nnfluid: %d, wall: %d, inlet: %d, noutlet: %d' % (self.nfluid,self.nwall,self.ninlet,self.noutlet))
 
         self.itppp_f = np.zeros(self.nfluid,  dtype='i8')
         self.itppp_w = np.zeros(self.nwall,   dtype='i8')
@@ -276,7 +277,7 @@ class Mesh:
         nsz = reader.line_num-1
         csvfile.close()
 
-        print 'reading csv...',fname,'...nsz:',nsz
+        print ('reading csv...',fname,'...nsz:',nsz)
 
         ijk = np.zeros([nsz,NFIELDS],dtype='int64')
 
@@ -304,7 +305,7 @@ class Mesh:
         read a mesh_transform.inp file (legacy)
         """
 
-        print 'reading mesh transform file:',filename
+        print ('reading mesh transform file:',filename)
 
         d = open(filename)
 
@@ -434,7 +435,7 @@ class Mesh:
         # This should consider the cell centers !!!
         """
 
-        print '\nin VTU_to_MOEBIUSmesh:',UG.GetNumberOfPoints()
+        print ('\nin VTU_to_MOEBIUSmesh:',UG.GetNumberOfPoints())
 
         for pid in xrange(UG.GetNumberOfPoints()):
 
@@ -519,7 +520,7 @@ class Mesh:
         filedat = fileout+'.dat'
         fileios = fileout+'.ios'
 
-        print 'writing new mesh header file ',filehdr
+        print ('writing new mesh header file ',filehdr)
 
         d = open(filehdr,'w')
         d.write('%d %d %d\n' % (self.nx,self.ny,self.nz))
@@ -530,7 +531,7 @@ class Mesh:
         if len(self.itppp_f) + len(self.itppp_w) + len(self.itppp_i) + len(self.itppp_o) == 0:
 
             if self.ijk_f.shape[0] + self.ijk_w.shape[0] + self.ijk_i.shape[0] + self.ijk_o.shape[0] == 0:
-                print 'Error: both itppp and ijk arrays are empty in writeVTM !'
+                print ('Error: both itppp and ijk arrays are empty in writeVTM !')
 
             if self.nx + self.ny + self.nz == 0:
 
@@ -574,11 +575,17 @@ class Mesh:
 
         jtppp.sort()
 
-        print 'writing new mesh dat file ',filedat
+        print ('writing new mesh dat file ',filedat)
         d = open(filedat,'w')
 
         for i4,flg,io_id in jtppp:
            i,j,k = self.ijk(i4)
+
+           # remove nodes outside of bounding box
+           if i<1 or i>self.nx: continue
+           if j<1 or j>self.ny: continue
+           if k<1 or k>self.nz: continue
+
            d.write('%d %d %d %d\n' % (i,j,k,flg) )
 
         d.close()
@@ -622,7 +629,7 @@ class Mesh:
         NN = len(ijk[:,0])
 
         if NN<=0:
-            print 'Error: zero size of ijk array in ',funcname
+            print ('Error: zero size of ijk array in ',funcname)
             sys.exit(1)
 
         # vtkCellArray is a supporting object that explicitly represents cell connectivity.
@@ -667,7 +674,7 @@ class Mesh:
             for j in range(8):
                 voxel.GetPointIds().SetId(j, index[j])
 
-            if i%500000==0: print 'Inserting cell at ',index,' / ncell:',ncell[0]
+            if i%500000==0: print ('Inserting cell at ',index,' / ncell:',ncell[0])
 
             grid.InsertNextCell(voxel.GetCellType(), voxel.GetPointIds())
 
@@ -815,7 +822,7 @@ class Mesh:
             setv = setv1 ^ setv2
 
         else:
-            print 'something wrong:',what
+            print ('something wrong:',what)
             sys.exit(1)
 
         previouspointsset = set()
@@ -949,7 +956,7 @@ class Mesh:
             setp = setp1 | setp2
 
         else:
-            print 'something wrong:',what
+            print ('something wrong:',what)
             sys.exit(1)
 
         voxel = vtkVoxel()
@@ -973,7 +980,7 @@ class Mesh:
                         ipp += 1
                         ip  += 1
                 else:
-                    print 'error here !'
+                    print ('error here !')
                     sys.exit(1)
 
             ugrid.InsertNextCell(voxel.GetCellType(), voxel.GetPointIds())
@@ -1035,7 +1042,7 @@ class Mesh:
             setp = setp1 | setp2
 
         else:
-            print 'something wrong:',what
+            print ('something wrong:',what)
             sys.exit(1)
 
         points = vtkPoints()
@@ -1263,7 +1270,7 @@ class Mesh:
         NN = len(ijk[:,0])
      
         if NN<=0:
-            print 'Error: zero size of ijk array in class:',classname
+            print ('Error: zero size of ijk array in class:',classname)
             sys.exit(1)
      
         # old style, only points/vertexes - no cells
@@ -1421,7 +1428,7 @@ class Mesh:
         """
 
         if self.nx + self.ny + self.nz == 0:
-            print 'Error: zero nx,ny,nz in writeVTU!'
+            print ('Error: zero nx,ny,nz in writeVTU!')
             sys.exit(1)
 
         ugrid = vtkUnstructuredGrid()
@@ -1541,10 +1548,10 @@ class Mesh:
                         break
 
             if col<0:
-                print 'Color unset !!!! cell topology error'
+                print ('Color unset !!!! cell topology error')
                 for j in range(8):
-                    print j,'index:',index[j], 'id:',nodedict[index[j]]
-                print
+                    print (j,'index:',index[j], 'id:',nodedict[index[j]])
+                print()
                 sys.exit(1)
 
             cnodetype.InsertNextValue( col )
@@ -1559,7 +1566,7 @@ class Mesh:
             for j in range(8):
                 voxel.GetPointIds().SetId(j, index[j])
      
-            if i%500000==0: print 'Inserting cell at ',index,' / ncell:',ncell[0]
+            if i%500000==0: print ('Inserting cell at ',index,' / ncell:',ncell[0])
      
             ugrid.InsertNextCell(voxel.GetCellType(), voxel.GetPointIds())
      
@@ -1672,12 +1679,12 @@ class Mesh:
         assemble a multiblock with fluids, wall, inlets, outlets and arrays to identify them
         """
 
-        print 'assemblying multiblock... '
+        print ('assemblying multiblock... ')
 
         if len(self.ijk_f) + len(self.ijk_w) + len(self.ijk_i) + len(self.ijk_o) == 0:
 
             if len(self.itppp_f) + len(self.itppp_w) + len(self.itppp_i) + len(self.itppp_o) == 0:
-                print 'Error: both itppp and ijk arrays are empty in _writeVTM !'
+                print ('Error: both itppp and ijk arrays are empty in _writeVTM !')
                 sys.exit(1)
 
             # convert itppp into ijk
@@ -1690,25 +1697,25 @@ class Mesh:
             for i4 in self.itppp_f:
                 self.ijk_f[n,:] = self.ijk(i4)
                 n += 1
-            if not n==self.nfluid: print 'Warning on fluid count',n,self.nfluid
+            if not n==self.nfluid: print ('Warning on fluid count',n,self.nfluid)
 
             n = 0
             for i4 in self.itppp_w:
                 self.ijk_w[n,:] = self.ijk(i4)
                 n += 1
-            if not n==self.nwall: print 'Warning on wall count',n,self.nwall
+            if not n==self.nwall: print ('Warning on wall count',n,self.nwall)
 
             n = 0
             for i4 in self.itppp_i:
                 self.ijk_i[n,:] = self.ijk(i4)
                 n += 1
-            if not n==self.ninlet: print 'Warning on inlet count',n,self.ninlet
+            if not n==self.ninlet: print ('Warning on inlet count',n,self.ninlet)
 
             n = 0
             for i4 in self.itppp_o:
                 self.ijk_o[n,:] = self.ijk(i4)
                 n += 1
-            if not n==self.noutlet: print 'Warning on outlet count',n,self.noutlet
+            if not n==self.noutlet: print ('Warning on outlet count',n,self.noutlet)
                 
 
         if self.nx + self.ny + self.nz == 0:
@@ -1716,7 +1723,7 @@ class Mesh:
             self.ny = max(np.amax(self.ijk_f[:,1]), np.amax(self.ijk_w[:,1]), np.amax(self.ijk_i[:,1]), np.amax(self.ijk_o[:,1]))
             self.nz = max(np.amax(self.ijk_f[:,2]), np.amax(self.ijk_w[:,2]), np.amax(self.ijk_i[:,2]), np.amax(self.ijk_o[:,2]))
 
-        print '... nx,ny,nz',self.nx,self.ny,self.nz
+        print ('... nx,ny,nz',self.nx,self.ny,self.nz)
 
         # for fluid show the whole cells
         if self.nfluid>0:  
@@ -1760,7 +1767,7 @@ class Mesh:
         write a multiblock .vtm file
         """
 
-        print 'writing multiblock .vtm file ... '
+        print ('writing multiblock .vtm file ... ')
         group = self.assembleVTM()
 
         writer = vtkXMLMultiBlockDataWriter()

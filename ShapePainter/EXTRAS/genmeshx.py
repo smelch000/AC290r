@@ -16,6 +16,7 @@ __IOFF=1
 from vtk import *
 import argparse
 import numpy as np
+import copy
 from scipy import ndimage
 
 import mesh as mesh
@@ -154,29 +155,32 @@ def scalesolids(filtsurf,  filtclip,filtaclip, filtins, filtouts, SCALE=1.):
 
     return filtsurf, filtclip, filtaclip, filtins, filtouts
  
-def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=False, openends=False, GRIDSPACING=1):
+def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=False, openends=False, GRIDSPACING=1, PERIODIC=None):
 
-    print('_buildinside...', 'wrapbywall', wrapbywall, 'openends:',openends, 'gridspacing:', GRIDSPACING)
+    print('_buildinside...', 'wrapbywall', wrapbywall, 'openends:',openends, 'gridspacing:', GRIDSPACING, 'periodic:',PERIODIC)
 
     bnd = filtsurf.GetOutput().GetBounds()
-    for filtin in filtins:
-        bndi=filtin.GetOutput().GetBounds()
-        bnd=(min(bnd[0],bndi[0]),max(bnd[1],bndi[1]),min(bnd[2],bndi[2]),max(bnd[3],bndi[3]),min(bnd[4],bndi[4]),max(bnd[5],bndi[5]))
+
+    if PERIODIC == None:
+        for filtin in filtins:
+            bndi=filtin.GetOutput().GetBounds()
+            bnd=(min(bnd[0],bndi[0]),max(bnd[1],bndi[1]),min(bnd[2],bndi[2]),max(bnd[3],bndi[3]),min(bnd[4],bndi[4]),max(bnd[5],bndi[5]))
       
-    for filtout in filtouts:
-        bndo=filtout.GetOutput().GetBounds()
-        bnd=(min(bnd[0],bndo[0]),max(bnd[1],bndo[1]),min(bnd[2],bndo[2]),max(bnd[3],bndo[3]),min(bnd[4],bndo[4]),max(bnd[5],bndo[5]))
+        for filtout in filtouts:
+            bndo=filtout.GetOutput().GetBounds()
+            bnd=(min(bnd[0],bndo[0]),max(bnd[1],bndo[1]),min(bnd[2],bndo[2]),max(bnd[3],bndo[3]),min(bnd[4],bndo[4]),max(bnd[5],bndo[5]))
 
     print 'Origin: %8.3f %8.3f %8.3f '%(bnd[0],bnd[2],bnd[4]), 'Bounds: %8.3f  %8.3f  %8.3f  %8.3f  %8.3f  %8.3f '%bnd
 
     surface = filtsurf.GetOutput()
 
     inlets = []
-    for filtin in filtins:
-        inlets.append(filtin.GetOutput())
     outlets = []
-    for filtout in filtouts:
-        outlets.append(filtout.GetOutput())
+    if PERIODIC == None:
+        for filtin in filtins:
+            inlets.append(filtin.GetOutput())
+        for filtout in filtouts:
+            outlets.append(filtout.GetOutput())
 
     clip, aclip = False, False
     if filtclip: clip = filtclip.GetOutput()
@@ -424,6 +428,67 @@ def buildinside(filtsurf, filtclip, filtaclip, filtins, filtouts, wrapbywall=Fal
         
         print 'final number of wall nodes',msh.nwall,'\n'
         msh.itppp_w.sort()
+
+    if PERIODIC != None: # copy first array of nodes onto last one (HACK)
+
+        print 'Size: F:',msh.itppp_f.size, 'W:',msh.itppp_w.size
+
+        N0 = msh.itppp_f.size
+        
+        if   PERIODIC == 'x':
+            N1 = msh.ny*msh.nz
+        elif PERIODIC == 'y':
+            N1 = msh.nx*msh.nz
+        elif PERIODIC == 'z':
+            N1 = msh.nx*msh.ny
+        else:
+            print 'PERIODIC can only be x,y,z'
+            sys.exit(1)
+
+        F = np.zeros(N0 + N1, np.int64)
+
+        F[:N0-1] = msh.itppp_f[:N0-1]
+
+        Nc = N0
+        for ifl in range(N0):
+            i4 = msh.itppp_f[ifl]
+            i,j,k = msh.ijk(i4)
+
+            if   PERIODIC == 'x':
+                ini = i
+            elif PERIODIC == 'y':
+                ini = j
+            elif PERIODIC == 'z':
+                ini = k
+
+            if ini != 1: continue
+
+            if   PERIODIC == 'x':
+                i4p = msh.i4back(msh.nx-1, j, k)
+            elif PERIODIC == 'y':
+                i4p = msh.i4back(i, msh.ny-1, k)
+            elif PERIODIC == 'z':
+                i4p = msh.i4back(i, j, msh.nz-1)
+
+            F[Nc] = i4p
+            Nc += 1
+
+            iflw = np.searchsorted(msh.itppp_w, i4p)
+
+            if iflw >= 0 and iflw < msh.nwall:
+                msh.itppp_w[iflw] = -1 # grounding spot
+
+        msh.itppp_f = np.unique( np.sort(F) )
+
+        # cleanup grounding spot
+        if   PERIODIC == 'x':
+            msh.nx -= 1
+
+        elif PERIODIC == 'y':
+            msh.nz -= 1
+
+        elif PERIODIC == 'z':
+            msh.nz -= 1
 
     return msh
 

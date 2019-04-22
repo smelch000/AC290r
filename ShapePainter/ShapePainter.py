@@ -13,7 +13,8 @@ def SP(NX, NY, NZ,
        INBC, OUTBC, 
        INVAL, OUTVAL, 
        OUTSTL,
-       VISUAL):
+       VISUAL, 
+       PERIODIC = None):
     """
     NX, NY, NZ: size of box in lattice units (l.u.)
     RADIUS: radius of cylinder in unstenotic region (l.u.)
@@ -21,11 +22,12 @@ def SP(NX, NY, NZ,
     INVAL, OUTVAL: values for boundary conditions (l.u.)
     OUTSTL: name of output file for triangular mesh
     VISUAL: flag to interactive visualization
+    PERIODIC: periodicity along x,y,z
     """
 
     HIZ = NZ/10.
 
-    OFF = 10
+    OFF = 0
 
     # paint pixels on the canvas
     volume = vtkImageData()
@@ -80,54 +82,60 @@ def SP(NX, NY, NZ,
     actor = vtkActor()
     actor.SetMapper(mapper)
 
-    # define the inlet box to select the inlet region
-    IN = vtkCubeSource()
-    IN.SetCenter(dxh, dyh, OFF+1)
-    IN.SetXLength(1.8*dxh); IN.SetYLength(1.8*dyh); IN.SetZLength(10)
-    tIN = vtkTriangleFilter()
-    tIN.SetInputConnection(IN.GetOutputPort())
-    mIN = vtkPolyDataMapper()
-    mIN.SetInputConnection(IN.GetOutputPort())
-    aIN = vtkActor()
-    aIN.SetMapper(mIN)
-    aIN.GetProperty().SetColor(1.,0.,0.)
-    aIN.GetProperty().SetOpacity(0.5)
-    writer = vtkSTLWriter()
-    writer.SetInputConnection(tIN.GetOutputPort())
-    writer.SetFileName('IN.stl')
-    writer.SetFileTypeToASCII()
-    writer.Write()
-
-    # define the outlet box to select the inlet region
-    OUT = vtkCubeSource()
-    OUT.SetCenter(dxh, dyh, OFF+NZ)
-    OUT.SetXLength(1.8*dxh); OUT.SetYLength(1.8*dyh); OUT.SetZLength(10)
-    tOUT = vtkTriangleFilter()
-    tOUT.SetInputConnection(OUT.GetOutputPort())
-    mOUT = vtkPolyDataMapper()
-    mOUT.SetInputConnection(OUT.GetOutputPort())
-    aOUT = vtkActor()
-    aOUT.SetMapper(mOUT)
-    aOUT.GetProperty().SetColor(0.,0.,1.)
-    aOUT.GetProperty().SetOpacity(0.5)
-    writer = vtkSTLWriter()
-    writer.SetInputConnection(tOUT.GetOutputPort())
-    writer.SetFileName('OUT.stl')
-    writer.SetFileTypeToASCII()
-    writer.Write()
-
-    # build mesh nodes inside the generated surfaces
-    mesh = GX.buildinside(triangles, None, None, [tIN], [tOUT], True, False, 1)
-
     i_globs, o_globs = [], []
-    i_globs.append( {'id':1, 'bctype':INBC, 'iodir':(0,0,-1), 'ioval':INVAL} )
-    o_globs.append( {'id':2, 'bctype':OUTBC, 'iodir':(0,0,+1), 'ioval':OUTVAL} )
+    if PERIODIC == None:
+        # define the inlet box to select the inlet region
+        IN = vtkCubeSource()
+        IN.SetCenter(dxh, dyh, OFF+1)
+        IN.SetXLength(1.8*dxh); IN.SetYLength(1.8*dyh); IN.SetZLength(10)
+        tIN = vtkTriangleFilter()
+        tIN.SetInputConnection(IN.GetOutputPort())
+        mIN = vtkPolyDataMapper()
+        mIN.SetInputConnection(IN.GetOutputPort())
+        aIN = vtkActor()
+        aIN.SetMapper(mIN)
+        aIN.GetProperty().SetColor(1.,0.,0.)
+        aIN.GetProperty().SetOpacity(0.5)
+        writer = vtkSTLWriter()
+        writer.SetInputConnection(tIN.GetOutputPort())
+        writer.SetFileName('IN.stl')
+        writer.SetFileTypeToASCII()
+        writer.Write()
+
+        # define the outlet box to select the inlet region
+        OUT = vtkCubeSource()
+        OUT.SetCenter(dxh, dyh, OFF+NZ)
+        OUT.SetXLength(1.8*dxh); OUT.SetYLength(1.8*dyh); OUT.SetZLength(10)
+        tOUT = vtkTriangleFilter()
+        tOUT.SetInputConnection(OUT.GetOutputPort())
+        mOUT = vtkPolyDataMapper()
+        mOUT.SetInputConnection(OUT.GetOutputPort())
+        aOUT = vtkActor()
+        aOUT.SetMapper(mOUT)
+        aOUT.GetProperty().SetColor(0.,0.,1.)
+        aOUT.GetProperty().SetOpacity(0.5)
+        writer = vtkSTLWriter()
+        writer.SetInputConnection(tOUT.GetOutputPort())
+        writer.SetFileName('OUT.stl')
+        writer.SetFileTypeToASCII()
+        writer.Write()
+
+        # build mesh nodes inside the generated surfaces
+        mesh = GX.buildinside(triangles, None, None, [tIN], [tOUT], True, False, 1)
+
+        i_globs.append( {'id':1, 'bctype':INBC, 'iodir':(0,0,-1), 'ioval':INVAL} )
+        o_globs.append( {'id':2, 'bctype':OUTBC, 'iodir':(0,0,+1), 'ioval':OUTVAL} )
+
+    else:
+
+        # build mesh nodes inside the generated surfaces
+        mesh = GX.buildinside(triangles, None, None, [], [], True, False, 1, PERIODIC)
 
     mesh.specifyNodes(mesh.itppp_f, mesh.itppp_w, mesh.itppp_i, mesh.itppp_o, 
                       i_id = mesh.itppp_i_id, o_id = mesh.itppp_o_id,
                       i_globs = i_globs, o_globs = o_globs)
 
-    # write mesh on file
+    # write mesh on file. We provide the bounding box here.
     mesh.writeMOEBIUSinput('bgkflag')
  
 

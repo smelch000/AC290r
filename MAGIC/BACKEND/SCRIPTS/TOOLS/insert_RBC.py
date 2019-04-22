@@ -17,7 +17,7 @@ __DMAX_RBC = 2.0    # maximum diameter RBC's
 
 # __CUTOFF_INSERTION = 1.0 # 2.0 # cutoff for random insertion of particles
 __CUTOFF_INSERTION = 1.2
-__CUTOFF_WALL = 0.5
+__CUTOFF_WALL = .5
 __GAMMAT = 0.0001
 __GAMMAR = 0.0001
 
@@ -68,38 +68,14 @@ def generate_cylinder(RADIUS,NX,NY,NZ):
     return MSH, ii_f, jj_f, kk_f, ii_w, jj_w, kk_w, itp_f, itp_w, itp_i, itp_o
 
 
-if __name__ == '__main__':
+def insert_RBC(mesh, RADIUS, HCT, alignment):
 
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('-H', '--hematocrit', required=True,  help='hematocrit in percentile (0.0: ~0.50 range)')
-    parser.add_argument('-m', '--mesh', required=False,  help='input mesh file')
-    parser.add_argument('-R', '--radius', required=False,  help='cylinder radius (l.u.)')
-    parser.add_argument('-A', '--alignment', required=True,  help='alignment of system (x, y or z)')
-
-    args = parser.parse_args()
-
-    HCT = float(args.hematocrit)
-    if HCT < 0. or HCT > 0.60:
-        print 'hematrocit level unreasonable:', HCT, '...set in the [0-0.50] range and rerun'
-        sys.exit(1)
-
-    alignment = args.alignment
-    if alignment not in ['x','y','z']:
-        print 'alignment can only be x,y or z'
-        sys.exit(1)
-
-    if args.mesh != None:
+    if mesh != None:
 
         MSH = Mesh()
-        MSH.loadMOEBIUSinput(args.mesh+'.hdr', args.mesh+'.dat')
+        MSH.loadMOEBIUSinput(mesh+'.hdr', mesh+'.dat')
 
     else:
-        if args.radius == None:
-            print 'For the test case, insert cylinder radius'
-            sys.exit(1)
-
-        RADIUS = float(args.radius)
         NX = int(RADIUS * 6)
         NY = int(2*RADIUS) + 10
         NZ = int(2*RADIUS) + 10
@@ -200,7 +176,8 @@ CLOSEMODEL
 
 
         fnr = os.path.join(os.getenv("MOEBIUS_ROOT"), 'BACKEND/SCRIPTS/TOOLS/insert_RBC_part')
-        os.system('gfortran -cpp -DLINKCELL -g -shared -fPIC %s.f90 -o %s.so'%(fnr,fnr))
+        # os.system('gfortran -cpp -DLINKCELL -g -shared -fPIC %s.f90 -o %s.so'%(fnr,fnr))
+        os.system('gfortran -cpp -g -shared -fPIC %s.f90 -o %s.so'%(fnr,fnr))
 
         # LIB = CDLL('./preproc_part.so', RTLD_GLOBAL)
         LIB = CDLL('%s.so'%fnr, RTLD_GLOBAL)
@@ -215,7 +192,7 @@ CLOSEMODEL
         jj_w_l = empty(MSH.nwall, dtype="int64")
         kk_w_l = empty(MSH.nwall, dtype="int64")
 
-        if args.mesh != None:
+        if mesh != None:
             for ifl in range(MSH.nfluid):
                 i4 = MSH.itppp_f[ifl]
                 i,j,k = MSH.ijk(i4)
@@ -313,4 +290,35 @@ CLOSEMODEL
     print >> a, 'CLOSECONFIG'
 
     a.close()
+
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-H', '--hematocrit', required=True,  help='hematocrit in percentile (0.0: ~0.50 range)')
+    parser.add_argument('-m', '--mesh', required=False,  help='input mesh file')
+    parser.add_argument('-R', '--radius', required=False,  help='cylinder radius (l.u.)')
+    parser.add_argument('-A', '--alignment', required=True,  help='alignment of system (x, y or z)')
+
+    args = parser.parse_args()
+
+    HCT = float(args.hematocrit)
+    if HCT < 0. or HCT > 0.60:
+        print 'hematrocit level unreasonable:', HCT, '...set in the [0-0.50] range and rerun'
+        sys.exit(1)
+
+    alignment = args.alignment
+    if alignment not in ['x','y','z']:
+        print 'alignment can only be x,y or z'
+        sys.exit(1)
+
+    if args.mesh == None:
+        if args.radius == None:
+            print 'For the test case, insert cylinder radius'
+            sys.exit(1)
+
+        RADIUS = float(radius)
+
+    insert_RBC(args.mesh, RADIUS, HCT, alignment)
 

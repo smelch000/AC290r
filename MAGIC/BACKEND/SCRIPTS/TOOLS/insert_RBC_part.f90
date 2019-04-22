@@ -50,15 +50,25 @@ INTEGER :: i,j,k
 
 ENDFUNCTION
 
-REAL FUNCTION dist2(r1,r2)
-    REAL :: r1(:), r2(:)
+REAL FUNCTION dist2(r1, r2, ialign)
+    REAL,INTENT(in) :: r1(:), r2(:)
+    INTEGER,INTENT(in) :: ialign
     REAL :: dx,dy,dz
 
     dx = r1(1) - r2(1)
     dy = r1(2) - r2(2)
     dz = r1(3) - r2(3)
 
-    dx = dx - NINT(dx/NX)*NX
+    IF      (ialign==1) THEN
+        dx = dx - NINT(dx/NX)*NX
+
+    ELSE IF (ialign==2) THEN
+        dy = dy - NINT(dy/NY)*NY
+
+    ELSE IF (ialign==3) THEN
+        dz = dz - NINT(dz/NZ)*NZ
+
+    ENDIF
 
     dist2 = dx**2 + dy**2 + dz**2
 
@@ -90,7 +100,7 @@ REAL(C_DOUBLE),DIMENSION(1:nfl) :: xo, yo, zo
 ! REAL :: cy,cz
 REAL :: d2
 LOGICAL :: tooclose
-REAL :: rr(3), ro(3) ! , rro(3,nx_l*ny_l*nz_l)
+REAL :: rr(3), ro(3), rw(3)
 INTEGER :: nold,i,j,k,nrnd
 REAL :: cut2,cutw2
 REAL :: rnd
@@ -106,17 +116,16 @@ INTEGER,ALLOCATABLE,SAVE :: ncx(:),indx(:,:)
     nxy2 = (nx + 2) * (ny + 2)
 
 #if defined(LINKCELL)
-    print *
     IF     (ialign==1) THEN ! x-axis
-        print *,'x-wise alignment'
+        print *,'x-alignment'
         ALLOCATE(ncx(1:nx), indx(1:nx, 1:nfl))
 
     ELSE IF(ialign==2) THEN ! y-axis
-        print *,'y-wise alignment'
+        print *,'y-alignment'
         ALLOCATE(ncx(1:ny), indx(1:ny, 1:nfl))
 
     ELSE IF(ialign==3) THEN ! z-axis
-        print *,'z-wise alignment'
+        print *,'z-alignment'
         ALLOCATE(ncx(1:nz), indx(1:nz, 1:nfl))
 
     ENDIF
@@ -153,24 +162,25 @@ INTEGER,ALLOCATABLE,SAVE :: ncx(:),indx(:,:)
         d2 = (rr(2) - cy)**2 + (rr(3) - cz)**2
         tooclose = (d2 > rw2) 
 #else
-        ! check if the RBC is too close to the wall
         DO i = 1, SIZE(ii_w)
-            ro(1) = ii_w(i)
-            ro(2) = jj_w(i)
-            ro(3) = kk_w(i)
-            IF ( dist2(ro, rr) < cutw2 ) THEN
+            !print *, i, ii_w(i), jj_w(i), kk_w(i)
+            rw(1) = ii_w(i)
+            rw(2) = jj_w(i)
+            rw(3) = kk_w(i)
+            IF ( dist2(rw, rr, ialign) < cutw2 ) THEN
                 tooclose = .true.
+                ! print *,'too close to wall', dist2(ro, rr, ialign)
                 EXIT
             ENDIF
         ENDDO
 #endif
 
-        ! check if the RBC is too close to a previously inserted RBC
         IF (.NOT. tooclose) THEN
 
 #if !defined(LINKCELL)
             DO i = 1, nold
-                IF ( dist2(ro, rr) < cut2 ) THEN
+                ro = [xo(i), yo(i), zo(i)]
+                IF ( dist2(ro, rr, ialign) < cut2 ) THEN
                     tooclose = .true.
                     EXIT
                 ENDIF
@@ -179,21 +189,27 @@ INTEGER,ALLOCATABLE,SAVE :: ncx(:),indx(:,:)
             ! little link cell
             DO i = ii_f(nrnd) - 1, ii_f(nrnd) + 1 
               ib = i
-              IF      (ialign == 1) THEN
-                  IF ( ib < 1 )  ib = ib + nx
-                  IF ( ib > nx ) ib = ib - nx
-              ELSE IF (ialign == 2) THEN
-                  IF ( ib < 1 )  ib = ib + ny
-                  IF ( ib > ny ) ib = ib - ny
-              ELSE IF (ialign == 3) THEN
-                  IF ( ib < 1 )  ib = ib + nz
-                  IF ( ib > nz ) ib = ib - nz
+
+              IF      (ialign==1) THEN
+                IF ( ib < 1 )  ib = ib + nx
+                IF ( ib > nx ) ib = ib - nx
+
+              ELSE IF (ialign==2) THEN
+                IF ( ib < 1 )  ib = ib + ny
+                IF ( ib > ny ) ib = ib - ny
+
+              ELSE IF (ialign==3) THEN
+                IF ( ib < 1 )  ib = ib + nz
+                IF ( ib > nz ) ib = ib - nz
+
               ENDIF
 
               DO j = 1, ncx(ib)
+
                 k = indx(ib,j)
                 ro = [xo(k), yo(k), zo(k)]
-                IF ( dist2(ro, rr) < cut2 ) THEN
+
+                IF ( dist2(ro, rr, ialign) < cut2 ) THEN
                     tooclose = .true.
                     EXIT
                 ENDIF

@@ -579,6 +579,12 @@ class Mesh:
 
         for i4,flg,io_id in jtppp:
            i,j,k = self.ijk(i4)
+
+           # remove nodes outside of bounding box
+           if i<1 or i>self.nx: continue
+           if j<1 or j>self.ny: continue
+           if k<1 or k>self.nz: continue
+
            d.write('%d %d %d %d\n' % (i,j,k,flg) )
 
         d.close()

@@ -176,8 +176,9 @@ CLOSEMODEL
 
 
         fnr = os.path.join(os.getenv("MOEBIUS_ROOT"), 'BACKEND/SCRIPTS/TOOLS/insert_RBC_part')
-        # os.system('gfortran -cpp -DLINKCELL -g -shared -fPIC %s.f90 -o %s.so'%(fnr,fnr))
-        os.system('gfortran -cpp -g -shared -fPIC %s.f90 -o %s.so'%(fnr,fnr))
+        os.system('gfortran -cpp -DLINKCELL -g -shared -fPIC %s.f90 -o %s.so'%(fnr,fnr))
+        # os.system('gfortran -cpp -g -shared -fPIC %s.f90 -o %s.so'%(fnr,fnr))
+        # os.system('gfortran -cpp -C -DLINKCELL -g -shared -fPIC %s.f90 -o %s.so'%(fnr,fnr))
 
         # LIB = CDLL('./preproc_part.so', RTLD_GLOBAL)
         LIB = CDLL('%s.so'%fnr, RTLD_GLOBAL)

@@ -93,7 +93,7 @@ INTEGER(C_INT),INTENT(in),VALUE :: ialign
 INTEGER(C_INT),INTENT(in),VALUE :: nx_l,ny_l,nz_l,nfl,nwl,nrbc,nsph
 REAL(C_FLOAT),INTENT(in),VALUE :: cutoff_insertion, cutoff_wall
 INTEGER(C_LONG),DIMENSION(0:nfl-1) :: ii_f, jj_f, kk_f
-INTEGER(C_LONG),DIMENSION(0:nfl-1) :: ii_w, jj_w, kk_w
+INTEGER(C_LONG),DIMENSION(0:nwl-1) :: ii_w, jj_w, kk_w
 ! REAL(C_FLOAT),DIMENSION(1:nfl) :: xo, yo, zo
 REAL(C_DOUBLE),DIMENSION(1:nfl) :: xo, yo, zo
 
@@ -118,15 +118,15 @@ INTEGER,ALLOCATABLE,SAVE :: ncx(:),indx(:,:)
 #if defined(LINKCELL)
     IF     (ialign==1) THEN ! x-axis
         print *,'x-alignment'
-        ALLOCATE(ncx(1:nx), indx(1:nx, 1:nfl))
+        ALLOCATE(ncx(1:nx), indx(1:nx, 1:nfl/8))
 
     ELSE IF(ialign==2) THEN ! y-axis
         print *,'y-alignment'
-        ALLOCATE(ncx(1:ny), indx(1:ny, 1:nfl))
+        ALLOCATE(ncx(1:ny), indx(1:ny, 1:nfl/8))
 
     ELSE IF(ialign==3) THEN ! z-axis
         print *,'z-alignment'
-        ALLOCATE(ncx(1:nz), indx(1:nz, 1:nfl))
+        ALLOCATE(ncx(1:nz), indx(1:nz, 1:nfl/8))
 
     ENDIF
     ncx(:) = 0

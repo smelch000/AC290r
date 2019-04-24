@@ -6,6 +6,7 @@ IMPLICIT NONE
 
 INTEGER :: nx,ny,nz
 INTEGER :: nx2 = 0, nxy2 = 0
+REAL :: rnx, rny, rnz
 
 CONTAINS
 
@@ -60,13 +61,13 @@ REAL FUNCTION dist2(r1, r2, ialign)
     dz = r1(3) - r2(3)
 
     IF      (ialign==1) THEN
-        dx = dx - NINT(dx/NX)*NX
+        dx = dx - NINT(rnx * dx)*NX
 
     ELSE IF (ialign==2) THEN
-        dy = dy - NINT(dy/NY)*NY
+        dy = dy - NINT(rny * dy)*NY
 
     ELSE IF (ialign==3) THEN
-        dz = dz - NINT(dz/NZ)*NZ
+        dz = dz - NINT(rnz * dz)*NZ
 
     ENDIF
 
@@ -92,10 +93,12 @@ IMPLICIT NONE
 INTEGER(C_INT),INTENT(in),VALUE :: ialign
 INTEGER(C_INT),INTENT(in),VALUE :: nx_l,ny_l,nz_l,nfl,nwl,nrbc,nsph
 REAL(C_FLOAT),INTENT(in),VALUE :: cutoff_insertion, cutoff_wall
-INTEGER(C_LONG),DIMENSION(0:nfl-1) :: ii_f, jj_f, kk_f
-INTEGER(C_LONG),DIMENSION(0:nwl-1) :: ii_w, jj_w, kk_w
+INTEGER(C_LONG),DIMENSION(0:nfl-1),TARGET :: ii_f, jj_f, kk_f
+INTEGER(C_LONG),DIMENSION(0:nwl-1),TARGET :: ii_w, jj_w, kk_w
 ! REAL(C_FLOAT),DIMENSION(1:nfl) :: xo, yo, zo
 REAL(C_DOUBLE),DIMENSION(1:nfl) :: xo, yo, zo
+INTEGER(C_LONG),POINTER :: ipnt_f(:)
+INTEGER(C_LONG),POINTER :: ipnt_w(:)
 
 ! REAL :: cy,cz
 REAL :: d2
@@ -106,6 +109,7 @@ REAL :: cut2,cutw2
 REAL :: rnd
 INTEGER :: ib
 INTEGER,ALLOCATABLE,SAVE :: ncx(:),indx(:,:)
+INTEGER,ALLOCATABLE,SAVE :: ncw(:),indw(:,:)
 
     CALL RANDOM_SEED()
 
@@ -115,33 +119,71 @@ INTEGER,ALLOCATABLE,SAVE :: ncx(:),indx(:,:)
     nx2 = nx + 2
     nxy2 = (nx + 2) * (ny + 2)
 
+    rnx = 1./nx
+    rny = 1./ny
+    rnz = 1./nz
+
 #if defined(LINKCELL)
     IF     (ialign==1) THEN ! x-axis
         print *,'x-alignment'
-        ALLOCATE(ncx(1:nx), indx(1:nx, 1:nfl/8))
+        ALLOCATE(ncx(1:nx), indx(1:nx, 1:10*ny*nz))
+        ALLOCATE(ncw(1:nx), indw(1:nx, 1:10*ny*nz))
 
     ELSE IF(ialign==2) THEN ! y-axis
         print *,'y-alignment'
-        ALLOCATE(ncx(1:ny), indx(1:ny, 1:nfl/8))
+        ALLOCATE(ncx(1:ny), indx(1:ny, 1:10*nx*nz))
+        ALLOCATE(ncw(1:ny), indw(1:ny, 1:10*nx*nz))
 
     ELSE IF(ialign==3) THEN ! z-axis
         print *,'z-alignment'
-        ALLOCATE(ncx(1:nz), indx(1:nz, 1:nfl/8))
+        ALLOCATE(ncx(1:nz), indx(1:nz, 1:10*nx*ny))
+        ALLOCATE(ncw(1:nz), indw(1:nz, 1:10*nx*ny))
 
     ENDIF
     ncx(:) = 0
+    ncw(:) = 0
 #endif
 
     print *,'...Fast particle placement...'
     !print *,'VALS:',nx_l,ny_l,nz_l,nfl,nwl,nrbc,nsph
     print *,'nx,ny,nz:',nx,ny,nz
     print *,'part-part cutoff:',cutoff_insertion,'part-wall cutoff:',cutoff_wall
-    !print *,ii_f(0:10)
-    !print *,jj_f(0:10)
-    !print *,kk_f(0:10)
 
     cut2 = cutoff_insertion**2
     cutw2 = cutoff_wall**2
+
+    print *,'size wall:',SIZE(ii_w)
+
+    IF      (ialign==1) THEN
+       ipnt_f => ii_f
+       ipnt_w => ii_w
+    ELSE IF (ialign==2) THEN
+       ipnt_f => jj_f
+       ipnt_w => jj_w
+    ELSE IF (ialign==3) THEN
+       ipnt_f => kk_f
+       ipnt_w => kk_w
+       print *,'BOUNDS:',LBOUND(kk_f,1),UBOUND(kk_f,1), LBOUND(ipnt_f,1),UBOUND(ipnt_f,1)
+       print *,'BOUNDS:',LBOUND(kk_w,1),UBOUND(kk_w,1), LBOUND(ipnt_w,1),UBOUND(ipnt_w,1)
+    ENDIF
+
+#ifdef LINKCELL
+    ncw(:) = 0
+    DO i = 0, SIZE(ii_w)-1
+
+        IF      (ialign==1) THEN
+          ib = ii_w(i)
+        ELSE IF (ialign==2) THEN
+          ib = jj_w(i)
+        ELSE IF (ialign==3) THEN
+          ib = kk_w(i)
+        ENDIF
+
+        ncw(ib) = ncw(ib) + 1
+        indw(ib, ncw(ib)) = nold
+
+    ENDDO
+#endif
 
     nold = 0
     ! cy = NY/2.; cz = NZ/2.
@@ -149,21 +191,43 @@ INTEGER,ALLOCATABLE,SAVE :: ncx(:),indx(:,:)
 
         CALL RANDOM_NUMBER(rnd)
 
-        ! nrnd = INT(rnd * SIZE(ii_f))
         nrnd = INT(rnd * nfl)
 
         rr = [ii_f(nrnd), jj_f(nrnd), kk_f(nrnd)]
-        ! print *,'rr:',rr
 
         tooclose = .false.
 
-#if 0
-        rw2 = radius - SQRT(cutw)
-        d2 = (rr(2) - cy)**2 + (rr(3) - cz)**2
-        tooclose = (d2 > rw2) 
+#ifdef LINKCELL
+        DO i = int(rr(ialign)) - 1, int(rr(ialign)) + 1
+          ib = i
+
+          IF      (ialign==1) THEN
+            IF ( ib < 1 )  ib = ib + nx
+            IF ( ib > nx ) ib = ib - nx
+
+          ELSE IF (ialign==2) THEN
+            IF ( ib < 1 )  ib = ib + ny
+            IF ( ib > ny ) ib = ib - ny
+
+          ELSE IF (ialign==3) THEN
+            IF ( ib < 1 )  ib = ib + nz
+            IF ( ib > nz ) ib = ib - nz
+
+          ENDIF
+
+          DO j = 1, ncw(ib)
+
+            k = indw(ib,j)
+            ro = [ii_w(k), jj_w(k), kk_w(k)]
+
+            IF ( dist2(ro, rr, ialign) < cutw2 ) THEN
+                tooclose = .true.
+                EXIT
+            ENDIF
+          ENDDO
+        ENDDO
 #else
         DO i = 1, SIZE(ii_w)
-            !print *, i, ii_w(i), jj_w(i), kk_w(i)
             rw(1) = ii_w(i)
             rw(2) = jj_w(i)
             rw(3) = kk_w(i)
@@ -187,7 +251,7 @@ INTEGER,ALLOCATABLE,SAVE :: ncx(:),indx(:,:)
             ENDDO
 #else
             ! little link cell
-            DO i = ii_f(nrnd) - 1, ii_f(nrnd) + 1 
+            DO i = ipnt_f(nrnd) - 1, ipnt_f(nrnd) + 1 
               ib = i
 
               IF      (ialign==1) THEN

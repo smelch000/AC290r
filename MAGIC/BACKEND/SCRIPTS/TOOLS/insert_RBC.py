@@ -17,7 +17,7 @@ __DMAX_RBC = 2.0    # maximum diameter RBC's
 
 # __CUTOFF_INSERTION = 1.0 # 2.0 # cutoff for random insertion of particles
 __CUTOFF_INSERTION = 1.2
-__CUTOFF_WALL = .5
+__CUTOFF_WALL = 1.1
 __GAMMAT = 0.0001
 __GAMMAR = 0.0001
 
@@ -176,8 +176,8 @@ CLOSEMODEL
 
 
         fnr = os.path.join(os.getenv("MOEBIUS_ROOT"), 'BACKEND/SCRIPTS/TOOLS/insert_RBC_part')
+        # os.system('gfortran -cpp -O3 -DLINKCELL -g -shared -fPIC %s.f90 -o %s.so'%(fnr,fnr))
         os.system('gfortran -cpp -DLINKCELL -g -shared -fPIC %s.f90 -o %s.so'%(fnr,fnr))
-        # os.system('gfortran -cpp -g -shared -fPIC %s.f90 -o %s.so'%(fnr,fnr))
         # os.system('gfortran -cpp -C -DLINKCELL -g -shared -fPIC %s.f90 -o %s.so'%(fnr,fnr))
 
         # LIB = CDLL('./preproc_part.so', RTLD_GLOBAL)

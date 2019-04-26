@@ -87,7 +87,7 @@ def SP(NX, NY, NZ,
         # define the inlet box to select the inlet region
         IN = vtkCubeSource()
         IN.SetCenter(dxh, dyh, OFF+1)
-        IN.SetXLength(1.8*dxh); IN.SetYLength(1.8*dyh); IN.SetZLength(10)
+        IN.SetXLength(2.0*dxh); IN.SetYLength(2.0*dyh); IN.SetZLength(10)
         tIN = vtkTriangleFilter()
         tIN.SetInputConnection(IN.GetOutputPort())
         mIN = vtkPolyDataMapper()
@@ -105,7 +105,7 @@ def SP(NX, NY, NZ,
         # define the outlet box to select the inlet region
         OUT = vtkCubeSource()
         OUT.SetCenter(dxh, dyh, OFF+NZ)
-        OUT.SetXLength(1.8*dxh); OUT.SetYLength(1.8*dyh); OUT.SetZLength(10)
+        OUT.SetXLength(2.0*dxh); OUT.SetYLength(2.0*dyh); OUT.SetZLength(10)
         tOUT = vtkTriangleFilter()
         tOUT.SetInputConnection(OUT.GetOutputPort())
         mOUT = vtkPolyDataMapper()
